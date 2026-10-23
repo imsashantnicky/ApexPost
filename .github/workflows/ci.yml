@@ -1,0 +1,46 @@
+
+name: ApexPost CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apexpost-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Display .NET SDK
+        run: dotnet --info
+
+      - name: Restore dependencies
+        run: dotnet restore ApexPost.sln
+
+      - name: Build solution
+        run: dotnet build ApexPost.sln --configuration Release --no-restore
+
+      - name: Run automated tests
+        run: dotnet test ApexPost.sln --configuration Release --no-build --no-restore
