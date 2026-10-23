@@ -15,4 +15,8 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ApexPost.Application\ApexPost.Application.csproj" />
+  </ItemGroup>
+
 </Project>
