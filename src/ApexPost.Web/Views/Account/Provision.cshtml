@@ -1,0 +1,13 @@
+@model ApexPost.Web.Models.ProvisionAccountViewModel
+@{ ViewData["Title"] = "Provision account"; }
+<h1>Provision account</h1>
+<p>Create a local account with the minimum role required for its duties.</p>
+@if (TempData["Status"] is string status) { <p role="status">@status</p> }
+<form asp-action="Provision" method="post">
+    <div asp-validation-summary="ModelOnly" role="alert"></div>
+    <label asp-for="UserName"></label><input asp-for="UserName" autocomplete="username" /><span asp-validation-for="UserName"></span>
+    <label asp-for="Password"></label><input asp-for="Password" autocomplete="new-password" /><span asp-validation-for="Password"></span>
+    <label asp-for="ConfirmPassword"></label><input asp-for="ConfirmPassword" autocomplete="new-password" /><span asp-validation-for="ConfirmPassword"></span>
+    <label asp-for="Role"></label><select asp-for="Role"><option>CounterClerk</option><option>BranchManager</option><option>Administrator</option></select><span asp-validation-for="Role"></span>
+    <button type="submit">Create account</button>
+</form>

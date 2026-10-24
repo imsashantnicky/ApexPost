@@ -109,6 +109,7 @@ public class ManagementUseCaseTests
     private sealed class BranchRepositoryDouble : IBranchRepository
     {
         private readonly Dictionary<Guid, Versioned<Branch>> items = [];
+        public Task<IReadOnlyList<Versioned<Branch>>> ListAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Versioned<Branch>>>(items.Values.ToArray());
         public Task<Versioned<Branch>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken) => Task.FromResult(items.GetValueOrDefault(id.Value));
         public Task<bool> TryAddAsync(Branch branch, CancellationToken cancellationToken)
         {
@@ -125,6 +126,7 @@ public class ManagementUseCaseTests
     private sealed class StaffRepositoryDouble : IStaffRepository
     {
         private readonly Dictionary<Guid, Versioned<StaffMember>> items = [];
+        public Task<IReadOnlyList<Versioned<StaffMember>>> ListAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Versioned<StaffMember>>>(items.Values.ToArray());
         public Task<Versioned<StaffMember>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken) => Task.FromResult(items.GetValueOrDefault(id.Value));
         public Task<bool> TryAddAsync(StaffMember staffMember, CancellationToken cancellationToken)
         {
@@ -141,6 +143,7 @@ public class ManagementUseCaseTests
     private sealed class CatalogueRepositoryDouble : IServiceDefinitionRepository
     {
         private readonly Dictionary<Guid, Versioned<ServiceDefinition>> items = [];
+        public Task<IReadOnlyList<Versioned<ServiceDefinition>>> ListAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Versioned<ServiceDefinition>>>(items.Values.ToArray());
         public Task<Versioned<ServiceDefinition>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken) => Task.FromResult(items.GetValueOrDefault(id.Value));
         public Task<bool> TryAddAsync(ServiceDefinition serviceDefinition, CancellationToken cancellationToken)
         {

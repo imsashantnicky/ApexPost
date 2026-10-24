@@ -1,9 +1,11 @@
 using ApexPost.Infrastructure.Persistence.Json;
 using ApexPost.Web.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApexPost.Web.Controllers;
 
+[Authorize]
 [Route("dashboard")]
 public sealed class DashboardController : Controller
 {

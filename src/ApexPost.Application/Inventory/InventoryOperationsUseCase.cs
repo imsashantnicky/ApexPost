@@ -16,6 +16,14 @@ public sealed class InventoryOperationsUseCase
         return item is null ? NotFound<InventoryItemResponse>() : ApplicationResults.Success(ToResponse(item.Value, item.Version));
     }
 
+    public async Task<IReadOnlyList<InventoryItemResponse>> ListAsync(CancellationToken cancellationToken) => (await repository.ListAsync(cancellationToken)).Select(item => ToResponse(item.Value, item.Version)).ToArray();
+    public async Task<ApplicationResult<InventoryItemResponse>> CreateAsync(CreateInventoryItemRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null || !TryId(request.BranchId, out var branchId)) return Invalid<InventoryItemResponse>();
+        try { var item = new InventoryItem(EntityId.New(), branchId, InventorySku.From(request.Sku), request.Name, request.ReorderLevel); return await repository.TryAddAsync(item, cancellationToken) ? ApplicationResults.Success(ToResponse(item, 1)) : Conflict<InventoryItemResponse>(); }
+        catch (DomainException exception) { return DomainFailure<InventoryItemResponse>(exception); }
+    }
+
     public async Task<ApplicationResult<InventoryItemResponse>> ReceiveAsync(AdjustInventoryRequest request, CancellationToken cancellationToken)
     {
         return await ChangeAsync(request, static (item, command) => item.Receive(command.Quantity, command.Reason, command.OccurredAt), cancellationToken);

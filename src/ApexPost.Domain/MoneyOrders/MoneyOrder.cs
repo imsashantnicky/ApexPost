@@ -46,6 +46,16 @@ public sealed class MoneyOrder
         ChangeStatus(MoneyOrderStatus.Expired, "Only an issued money order can expire.");
     }
 
+    public static MoneyOrder Restore(EntityId id, MoneyOrderNumber orderNumber, MoneyOrderAmount amount, EntityId originatingBranchId, MoneyOrderBeneficiary beneficiary, MoneyOrderStatus status)
+    {
+        var order = new MoneyOrder(id, orderNumber, amount, originatingBranchId, beneficiary);
+        if (status == MoneyOrderStatus.Paid) order.MarkPaid();
+        else if (status == MoneyOrderStatus.Cancelled) order.Cancel();
+        else if (status == MoneyOrderStatus.Expired) order.Expire();
+        else if (status != MoneyOrderStatus.Issued) throw new DomainException("Money order status must be recognized.");
+        return order;
+    }
+
     private void ChangeStatus(MoneyOrderStatus targetStatus, string errorMessage)
     {
         if (Status != MoneyOrderStatus.Issued)

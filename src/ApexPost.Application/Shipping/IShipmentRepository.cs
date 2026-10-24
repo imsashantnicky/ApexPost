@@ -6,6 +6,7 @@ namespace ApexPost.Application.Shipping;
 
 public interface IShipmentRepository
 {
+    Task<IReadOnlyList<Versioned<Shipment>>> ListAsync(CancellationToken cancellationToken);
     Task<Versioned<Shipment>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken);
     Task<bool> TryAddAsync(Shipment shipment, CancellationToken cancellationToken);
     Task<bool> TryUpdateAsync(Shipment shipment, long expectedVersion, CancellationToken cancellationToken);

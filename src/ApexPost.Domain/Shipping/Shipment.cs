@@ -64,6 +64,17 @@ public sealed class Shipment
         Status = ShipmentStatus.Cancelled;
     }
 
+    public static Shipment Restore(EntityId id, ShipmentNumber shipmentNumber, ShipmentParty sender, ShipmentParty recipient, EntityId serviceId, ShipmentPackage package, ShipmentCharge charge, ShipmentStatus status)
+    {
+        var shipment = new Shipment(id, shipmentNumber, sender, recipient, serviceId, package, charge);
+        if (status == ShipmentStatus.Accepted) shipment.Accept();
+        else if (status == ShipmentStatus.InTransit) { shipment.Accept(); shipment.Dispatch(); }
+        else if (status == ShipmentStatus.Delivered) { shipment.Accept(); shipment.Dispatch(); shipment.Deliver(); }
+        else if (status == ShipmentStatus.Cancelled) shipment.Cancel();
+        else if (status != ShipmentStatus.Booked) throw new DomainException("Shipment status must be recognized.");
+        return shipment;
+    }
+
     private void ChangeStatus(ShipmentStatus expectedStatus, ShipmentStatus targetStatus, string errorMessage)
     {
         if (Status != expectedStatus)

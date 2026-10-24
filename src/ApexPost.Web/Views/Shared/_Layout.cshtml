@@ -26,6 +26,19 @@
                         <li class="nav-item">
                             <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
                         </li>
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Branches" asp-action="Index">Branches</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Index">Staff</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="Catalogue" asp-action="Index">Catalogue</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="Inventory" asp-action="Index">Inventory</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="Shipments" asp-action="Index">Shipments</a></li>
+                            <li class="nav-item"><form asp-controller="Account" asp-action="Logout" method="post"><button class="nav-link btn btn-link">Sign out</button></form></li>
+                        }
+                        else
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Account" asp-action="Login">Sign in</a></li>
+                        }
                     </ul>
                 </div>
             </div>

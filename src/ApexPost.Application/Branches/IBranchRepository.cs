@@ -6,6 +6,7 @@ namespace ApexPost.Application.Branches;
 
 public interface IBranchRepository
 {
+    Task<IReadOnlyList<Versioned<Branch>>> ListAsync(CancellationToken cancellationToken);
     Task<Versioned<Branch>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken);
     Task<bool> TryAddAsync(Branch branch, CancellationToken cancellationToken);
     Task<bool> TryUpdateAsync(Branch branch, long expectedVersion, CancellationToken cancellationToken);

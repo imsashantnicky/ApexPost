@@ -54,7 +54,7 @@ public class OperationalUseCaseTests
     public async Task ShipmentBookingAndTrackingFollowLifecycle()
     {
         var repository = new ShipmentRepositoryDouble();
-        var useCase = new ShipmentOperationsUseCase(repository);
+        var useCase = new ShipmentOperationsUseCase(repository, new PriceLookup());
         var booked = await useCase.BookAsync(ShipmentRequest("SHP-000001"), default);
         var accepted = await useCase.AcceptAsync(booked.Value.Id, 1, default);
         var dispatched = await useCase.DispatchAsync(booked.Value.Id, 2, default);
@@ -67,7 +67,7 @@ public class OperationalUseCaseTests
     [Fact]
     public async Task ShipmentRejectsDuplicateBookingAndInvalidTransition()
     {
-        var useCase = new ShipmentOperationsUseCase(new ShipmentRepositoryDouble());
+        var useCase = new ShipmentOperationsUseCase(new ShipmentRepositoryDouble(), new PriceLookup());
         var booked = await useCase.BookAsync(ShipmentRequest("SHP-000001"), default);
         var duplicate = await useCase.BookAsync(ShipmentRequest("shp-000001"), default);
         var invalid = await useCase.DeliverAsync(booked.Value.Id, 1, default);
@@ -80,7 +80,7 @@ public class OperationalUseCaseTests
     public async Task ShipmentBookingRejectsInvalidRequest()
     {
         var request = ShipmentRequest("SHP-000001") with { ChargeAmount = 0m };
-        var result = await new ShipmentOperationsUseCase(new ShipmentRepositoryDouble()).BookAsync(request, default);
+        var result = await new ShipmentOperationsUseCase(new ShipmentRepositoryDouble(), new PriceLookup()).BookAsync(request, default);
 
         Assert.Equal("domain.rule", Assert.Single(result.Errors).Code);
     }
@@ -130,7 +130,9 @@ public class OperationalUseCaseTests
         private Versioned<InventoryItem> item;
         public InventoryRepositoryDouble(InventoryItem item) { this.item = new(item, 1); ItemId = item.Id.Value; }
         public Guid ItemId { get; }
+        public Task<IReadOnlyList<Versioned<InventoryItem>>> ListAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Versioned<InventoryItem>>>([item]);
         public Task<Versioned<InventoryItem>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken) => Task.FromResult<Versioned<InventoryItem>?>(id.Value == ItemId ? item : null);
+        public Task<bool> TryAddAsync(InventoryItem value, CancellationToken cancellationToken) => Task.FromResult(false);
         public Task<bool> TryUpdateAsync(InventoryItem value, long expectedVersion, CancellationToken cancellationToken)
         {
             if (expectedVersion != item.Version) return Task.FromResult(false);
@@ -141,6 +143,7 @@ public class OperationalUseCaseTests
     private sealed class ShipmentRepositoryDouble : IShipmentRepository
     {
         private readonly Dictionary<Guid, Versioned<Shipment>> items = [];
+        public Task<IReadOnlyList<Versioned<Shipment>>> ListAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Versioned<Shipment>>>(items.Values.ToArray());
         public Task<Versioned<Shipment>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken) => Task.FromResult(items.GetValueOrDefault(id.Value));
         public Task<bool> TryAddAsync(Shipment item, CancellationToken cancellationToken) { if (items.Values.Any(value => value.Value.ShipmentNumber == item.ShipmentNumber)) return Task.FromResult(false); items[item.Id.Value] = new(item, 1); return Task.FromResult(true); }
         public Task<bool> TryUpdateAsync(Shipment item, long expectedVersion, CancellationToken cancellationToken) { if (!items.TryGetValue(item.Id.Value, out var current) || current.Version != expectedVersion) return Task.FromResult(false); items[item.Id.Value] = new(item, expectedVersion + 1); return Task.FromResult(true); }
@@ -152,5 +155,13 @@ public class OperationalUseCaseTests
         public Task<Versioned<MoneyOrder>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken) => Task.FromResult(items.GetValueOrDefault(id.Value));
         public Task<bool> TryAddAsync(MoneyOrder item, CancellationToken cancellationToken) { if (items.Values.Any(value => value.Value.OrderNumber == item.OrderNumber)) return Task.FromResult(false); items[item.Id.Value] = new(item, 1); return Task.FromResult(true); }
         public Task<bool> TryUpdateAsync(MoneyOrder item, long expectedVersion, CancellationToken cancellationToken) { if (!items.TryGetValue(item.Id.Value, out var current) || current.Version != expectedVersion) return Task.FromResult(false); items[item.Id.Value] = new(item, expectedVersion + 1); return Task.FromResult(true); }
+    }
+
+    private sealed class PriceLookup : ApexPost.Application.Transactions.IServicePriceLookup
+    {
+        public Task<ApexPost.Domain.Pricing.ServicePrice?> GetCurrentPriceAsync(EntityId serviceId, string currencyCode, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<ApexPost.Domain.Pricing.ServicePrice?>(ApexPost.Domain.Pricing.ServicePrice.From(10m, currencyCode));
+        }
     }
 }

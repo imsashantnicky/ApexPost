@@ -1,0 +1,28 @@
+{
+  "11111111111111111111111111111111": {
+    "Id": "11111111-1111-1111-1111-111111111111",
+    "Version": 1,
+    "Code": "BLR-001",
+    "Name": "Bengaluru Central",
+    "Line1": "1 Market Road",
+    "Line2": null,
+    "City": "Bengaluru",
+    "PostalCode": "560001",
+    "CountryCode": "IN",
+    "CounterCount": 3,
+    "Status": 0
+  },
+  "22222222222222222222222222222222": {
+    "Id": "22222222-2222-2222-2222-222222222222",
+    "Version": 1,
+    "Code": "MYS-001",
+    "Name": "Mysuru Central",
+    "Line1": "2 Lake Road",
+    "Line2": null,
+    "City": "Mysuru",
+    "PostalCode": "570001",
+    "CountryCode": "IN",
+    "CounterCount": 2,
+    "Status": 0
+  }
+}

@@ -56,6 +56,15 @@ public sealed class ServiceDefinition
         Availability = ServiceAvailability.Retired;
     }
 
+    public static ServiceDefinition Restore(EntityId id, ServiceCode code, string name, string description, ServiceAvailability availability)
+    {
+        var service = new ServiceDefinition(id, code, name, description);
+        if (availability == ServiceAvailability.Unavailable) service.MakeUnavailable();
+        else if (availability == ServiceAvailability.Retired) service.Retire();
+        else if (availability != ServiceAvailability.Available) throw new DomainException("Service availability must be recognized.");
+        return service;
+    }
+
     private static string RequiredText(string value, string fieldName, int maximumLength)
     {
         var normalizedValue = value?.Trim();

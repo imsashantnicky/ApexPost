@@ -38,6 +38,23 @@ public sealed class JsonCollectionStore<T>
 
     public Task<bool> TryReplaceAsync(string key, T value, CancellationToken cancellationToken) => ChangeAsync(key, value, static (items, itemKey, itemValue) => { if (!items.ContainsKey(itemKey)) return false; items[itemKey] = itemValue; return true; }, cancellationToken);
 
+    public async Task<bool> TryReplaceAsync(string key, T value, Func<T, bool> predicate, CancellationToken cancellationToken)
+    {
+        ValidateKey(key);
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(predicate);
+        await fileLock.WaitAsync(cancellationToken);
+        try
+        {
+            var items = await ReadUnsafeAsync(cancellationToken);
+            if (!items.TryGetValue(key, out var current) || !predicate(current)) return false;
+            items[key] = value;
+            await WriteUnsafeAsync(items, cancellationToken);
+            return true;
+        }
+        finally { fileLock.Release(); }
+    }
+
     public async Task<bool> TryDeleteAsync(string key, CancellationToken cancellationToken)
     {
         ValidateKey(key);

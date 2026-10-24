@@ -1,0 +1,18 @@
+{
+  "55555555555555555555555555555555": {
+    "Id": "55555555-5555-5555-5555-555555555555",
+    "Version": 1,
+    "Code": "EXP-001",
+    "Name": "Express Parcel",
+    "Description": "Priority parcel delivery.",
+    "Availability": 0
+  },
+  "66666666666666666666666666666666": {
+    "Id": "66666666-6666-6666-6666-666666666666",
+    "Version": 1,
+    "Code": "REG-001",
+    "Name": "Registered Post",
+    "Description": "Tracked standard delivery.",
+    "Availability": 0
+  }
+}
