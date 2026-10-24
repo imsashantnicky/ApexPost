@@ -8,5 +8,145 @@
     "ServiceCode": "REG-001",
     "Amount": 45.00,
     "CurrencyCode": "INR"
+  },
+  "DOC-001": {
+    "ServiceCode": "DOC-001",
+    "Amount": 65.00,
+    "CurrencyCode": "INR"
+  },
+  "ECO-001": {
+    "ServiceCode": "ECO-001",
+    "Amount": 85.00,
+    "CurrencyCode": "INR"
+  },
+  "SMD-001": {
+    "ServiceCode": "SMD-001",
+    "Amount": 180.00,
+    "CurrencyCode": "INR"
+  },
+  "INT-001": {
+    "ServiceCode": "INT-001",
+    "Amount": 110.00,
+    "CurrencyCode": "INR"
+  },
+  "FRG-001": {
+    "ServiceCode": "FRG-001",
+    "Amount": 150.00,
+    "CurrencyCode": "INR"
+  },
+  "INS-001": {
+    "ServiceCode": "INS-001",
+    "Amount": 175.00,
+    "CurrencyCode": "INR"
+  },
+  "RET-001": {
+    "ServiceCode": "RET-001",
+    "Amount": 95.00,
+    "CurrencyCode": "INR"
+  },
+  "BUL-001": {
+    "ServiceCode": "BUL-001",
+    "Amount": 250.00,
+    "CurrencyCode": "INR"
+  },
+  "COD-001": {
+    "ServiceCode": "COD-001",
+    "Amount": 70.00,
+    "CurrencyCode": "INR"
+  },
+  "SIG-001": {
+    "ServiceCode": "SIG-001",
+    "Amount": 35.00,
+    "CurrencyCode": "INR"
+  },
+  "TRK-001": {
+    "ServiceCode": "TRK-001",
+    "Amount": 40.00,
+    "CurrencyCode": "INR"
+  },
+  "OVN-001": {
+    "ServiceCode": "OVN-001",
+    "Amount": 220.00,
+    "CurrencyCode": "INR"
+  },
+  "RUR-001": {
+    "ServiceCode": "RUR-001",
+    "Amount": 100.00,
+    "CurrencyCode": "INR"
+  },
+  "PKG-001": {
+    "ServiceCode": "PKG-001",
+    "Amount": 25.00,
+    "CurrencyCode": "INR"
+  },
+  "BOX-001": {
+    "ServiceCode": "BOX-001",
+    "Amount": 30.00,
+    "CurrencyCode": "INR"
+  },
+  "BOX-002": {
+    "ServiceCode": "BOX-002",
+    "Amount": 50.00,
+    "CurrencyCode": "INR"
+  },
+  "BOX-003": {
+    "ServiceCode": "BOX-003",
+    "Amount": 75.00,
+    "CurrencyCode": "INR"
+  },
+  "ENV-001": {
+    "ServiceCode": "ENV-001",
+    "Amount": 15.00,
+    "CurrencyCode": "INR"
+  },
+  "TAP-001": {
+    "ServiceCode": "TAP-001",
+    "Amount": 20.00,
+    "CurrencyCode": "INR"
+  },
+  "WRP-001": {
+    "ServiceCode": "WRP-001",
+    "Amount": 35.00,
+    "CurrencyCode": "INR"
+  },
+  "LBL-001": {
+    "ServiceCode": "LBL-001",
+    "Amount": 5.00,
+    "CurrencyCode": "INR"
+  },
+  "PRT-001": {
+    "ServiceCode": "PRT-001",
+    "Amount": 3.00,
+    "CurrencyCode": "INR"
+  },
+  "CPY-001": {
+    "ServiceCode": "CPY-001",
+    "Amount": 2.00,
+    "CurrencyCode": "INR"
+  },
+  "SCN-001": {
+    "ServiceCode": "SCN-001",
+    "Amount": 10.00,
+    "CurrencyCode": "INR"
+  },
+  "POD-001": {
+    "ServiceCode": "POD-001",
+    "Amount": 20.00,
+    "CurrencyCode": "INR"
+  },
+  "SMS-001": {
+    "ServiceCode": "SMS-001",
+    "Amount": 12.00,
+    "CurrencyCode": "INR"
+  },
+  "WGT-001": {
+    "ServiceCode": "WGT-001",
+    "Amount": 5.00,
+    "CurrencyCode": "INR"
+  },
+  "HND-001": {
+    "ServiceCode": "HND-001",
+    "Amount": 60.00,
+    "CurrencyCode": "INR"
   }
 }

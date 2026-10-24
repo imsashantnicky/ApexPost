@@ -3,7 +3,7 @@ namespace ApexPost.Infrastructure.Persistence.Json;
 /// <summary>Writes operational audit metadata. Secrets and personal-document fields are rejected.</summary>
 public sealed class JsonAuditWriter
 {
-    private static readonly string[] SensitiveKeyFragments = ["password", "token", "secret", "card", "document", "identity", "address", "phone", "email"];
+    private static readonly string[] SensitiveKeyFragments = ["password", "passwd", "token", "secret", "card", "cvv", "credential", "payment", "document", "identity", "passport", "ssn", "address", "phone", "email", "auth", "session"];
     private readonly JsonCollectionStore<JsonAuditRecord> store;
 
     public JsonAuditWriter(string dataDirectory)
@@ -17,7 +17,7 @@ public sealed class JsonAuditWriter
         Validate(entityType, nameof(entityType));
         Validate(entityId, nameof(entityId));
         var safeMetadata = metadata ?? new Dictionary<string, string>();
-        if (safeMetadata.Keys.Any(key => SensitiveKeyFragments.Any(fragment => key.Contains(fragment, StringComparison.OrdinalIgnoreCase))))
+        if (safeMetadata.Keys.Any(key => ContainsSensitiveText(key)) || safeMetadata.Values.Any(value => ContainsSensitiveText(value)))
         {
             throw new ArgumentException("Audit metadata cannot contain sensitive fields.", nameof(metadata));
         }
@@ -30,5 +30,11 @@ public sealed class JsonAuditWriter
     private static void Validate(string value, string parameterName)
     {
         if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException("Audit value is required.", parameterName);
+    }
+
+    private static bool ContainsSensitiveText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        return SensitiveKeyFragments.Any(fragment => value.Contains(fragment, StringComparison.OrdinalIgnoreCase));
     }
 }

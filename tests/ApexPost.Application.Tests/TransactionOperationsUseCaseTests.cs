@@ -141,6 +141,7 @@ public class TransactionOperationsUseCaseTests
     private sealed class TransactionRepositoryDouble : IRetailTransactionRepository
     {
         private readonly Dictionary<Guid, Versioned<RetailTransaction>> items = [];
+        public Task<IReadOnlyList<Versioned<RetailTransaction>>> ListAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Versioned<RetailTransaction>>>(items.Values.ToArray());
         public Task<Versioned<RetailTransaction>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken) => Task.FromResult(items.GetValueOrDefault(id.Value));
         public Task<bool> TryAddAsync(RetailTransaction transaction, CancellationToken cancellationToken) { items[transaction.Id.Value] = new(transaction, 1); return Task.FromResult(true); }
         public Task<bool> TryUpdateAsync(RetailTransaction transaction, long expectedVersion, CancellationToken cancellationToken) => TryStoreAsync(transaction, expectedVersion);

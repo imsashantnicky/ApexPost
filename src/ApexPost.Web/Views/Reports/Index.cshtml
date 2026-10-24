@@ -1,0 +1,78 @@
+@model ApexPost.Application.Reporting.OperationalSummaryReport
+@{
+    ViewData["Title"] = "Operational reports";
+}
+
+<h1>Operational reports</h1>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5">Generated @Model.GeneratedAtUtc.ToLocalTime().ToString("g")</h2>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h3 class="h6">Transactions</h3>
+                <p class="mb-1"><strong>@Model.Transactions.TotalCount</strong> total</p>
+                <p class="mb-1">Paid: @Model.Transactions.PaidCount</p>
+                <p class="mb-0">Value: @Model.Transactions.TotalValue.ToString("C")</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h3 class="h6">Payments</h3>
+                <p class="mb-1"><strong>@Model.Payments.TotalCount</strong> total</p>
+                <p class="mb-1">Pending: @Model.Payments.PendingCount</p>
+                <p class="mb-0">Collected: @Model.Payments.TotalCollected.ToString("C")</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h3 class="h6">Shipments</h3>
+                <p class="mb-1">Booked: @Model.Shipments.BookedCount</p>
+                <p class="mb-1">In transit: @Model.Shipments.InTransitCount</p>
+                <p class="mb-0">Delivered: @Model.Shipments.DeliveredCount</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h3 class="h6">Inventory</h3>
+                <p class="mb-1">Items: @Model.Inventory.ItemCount</p>
+                <p class="mb-1">Units on hand: @Model.Inventory.UnitsOnHand</p>
+                <p class="mb-0">Reorder alerts: @Model.Inventory.ReorderAlerts</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h2 class="h4 mt-4">Branch activity</h2>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Branch</th>
+            <th>Inventory Items</th>
+            <th>Reorder Alerts</th>
+            <th>Money Orders</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var branch in Model.BranchActivity.Branches)
+        {
+            <tr>
+                <td>@branch.BranchName (@branch.BranchCode)</td>
+                <td>@branch.InventoryItems</td>
+                <td>@branch.ReorderAlerts</td>
+                <td>@branch.MoneyOrderCount</td>
+            </tr>
+        }
+    </tbody>
+</table>

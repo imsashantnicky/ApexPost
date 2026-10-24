@@ -14,5 +14,245 @@
     "Name": "Registered Post",
     "Description": "Tracked standard delivery.",
     "Availability": 0
+  },
+  "00000003000000000000000000000001": {
+    "Id": "00000003-0000-0000-0000-000000000001",
+    "Version": 1,
+    "Code": "EXP-001",
+    "Name": "Express Parcel",
+    "Description": "Priority parcel delivery.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000002": {
+    "Id": "00000003-0000-0000-0000-000000000002",
+    "Version": 1,
+    "Code": "REG-001",
+    "Name": "Registered Post",
+    "Description": "Tracked standard delivery.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000003": {
+    "Id": "00000003-0000-0000-0000-000000000003",
+    "Version": 1,
+    "Code": "DOC-001",
+    "Name": "Document Courier",
+    "Description": "Tracked document envelope.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000004": {
+    "Id": "00000003-0000-0000-0000-000000000004",
+    "Version": 1,
+    "Code": "ECO-001",
+    "Name": "Economy Parcel",
+    "Description": "Economy parcel delivery.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000005": {
+    "Id": "00000003-0000-0000-0000-000000000005",
+    "Version": 1,
+    "Code": "SMD-001",
+    "Name": "Same-Day Local",
+    "Description": "Local same-day delivery where available.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000006": {
+    "Id": "00000003-0000-0000-0000-000000000006",
+    "Version": 1,
+    "Code": "INT-001",
+    "Name": "Intercity Parcel",
+    "Description": "Standard intercity parcel delivery.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000007": {
+    "Id": "00000003-0000-0000-0000-000000000007",
+    "Version": 1,
+    "Code": "FRG-001",
+    "Name": "Fragile Handling",
+    "Description": "Fragile-item handling service.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000008": {
+    "Id": "00000003-0000-0000-0000-000000000008",
+    "Version": 1,
+    "Code": "INS-001",
+    "Name": "Insured Parcel",
+    "Description": "Eligible declared-value cover.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000009": {
+    "Id": "00000003-0000-0000-0000-000000000009",
+    "Version": 1,
+    "Code": "RET-001",
+    "Name": "Return Shipment",
+    "Description": "Merchant return service.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000010": {
+    "Id": "00000003-0000-0000-0000-000000000010",
+    "Version": 1,
+    "Code": "BUL-001",
+    "Name": "Bulk Consignment",
+    "Description": "Multi-piece business consignment.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000011": {
+    "Id": "00000003-0000-0000-0000-000000000011",
+    "Version": 1,
+    "Code": "COD-001",
+    "Name": "Cash-on-Delivery",
+    "Description": "Eligible delivery collection service.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000012": {
+    "Id": "00000003-0000-0000-0000-000000000012",
+    "Version": 1,
+    "Code": "SIG-001",
+    "Name": "Signature Required",
+    "Description": "Delivery requiring recipient signature.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000013": {
+    "Id": "00000003-0000-0000-0000-000000000013",
+    "Version": 1,
+    "Code": "TRK-001",
+    "Name": "Tracked Letter",
+    "Description": "Letter service with tracking.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000014": {
+    "Id": "00000003-0000-0000-0000-000000000014",
+    "Version": 1,
+    "Code": "OVN-001",
+    "Name": "Overnight Express",
+    "Description": "Priority overnight delivery.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000015": {
+    "Id": "00000003-0000-0000-0000-000000000015",
+    "Version": 1,
+    "Code": "RUR-001",
+    "Name": "Rural Delivery",
+    "Description": "Delivery to supported rural destinations.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000016": {
+    "Id": "00000003-0000-0000-0000-000000000016",
+    "Version": 1,
+    "Code": "PKG-001",
+    "Name": "Packaging Service",
+    "Description": "Counter packaging assistance.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000017": {
+    "Id": "00000003-0000-0000-0000-000000000017",
+    "Version": 1,
+    "Code": "BOX-001",
+    "Name": "Small Shipping Box",
+    "Description": "Small standard shipping box.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000018": {
+    "Id": "00000003-0000-0000-0000-000000000018",
+    "Version": 1,
+    "Code": "BOX-002",
+    "Name": "Medium Shipping Box",
+    "Description": "Medium standard shipping box.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000019": {
+    "Id": "00000003-0000-0000-0000-000000000019",
+    "Version": 1,
+    "Code": "BOX-003",
+    "Name": "Large Shipping Box",
+    "Description": "Large standard shipping box.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000020": {
+    "Id": "00000003-0000-0000-0000-000000000020",
+    "Version": 1,
+    "Code": "ENV-001",
+    "Name": "Document Envelope",
+    "Description": "Padded document envelope.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000021": {
+    "Id": "00000003-0000-0000-0000-000000000021",
+    "Version": 1,
+    "Code": "TAP-001",
+    "Name": "Packing Tape",
+    "Description": "Packing tape roll.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000022": {
+    "Id": "00000003-0000-0000-0000-000000000022",
+    "Version": 1,
+    "Code": "WRP-001",
+    "Name": "Protective Wrap",
+    "Description": "Protective wrapping material.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000023": {
+    "Id": "00000003-0000-0000-0000-000000000023",
+    "Version": 1,
+    "Code": "LBL-001",
+    "Name": "Printed Shipping Label",
+    "Description": "Printed shipping label.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000024": {
+    "Id": "00000003-0000-0000-0000-000000000024",
+    "Version": 1,
+    "Code": "PRT-001",
+    "Name": "Document Printing",
+    "Description": "Black-and-white printing per page.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000025": {
+    "Id": "00000003-0000-0000-0000-000000000025",
+    "Version": 1,
+    "Code": "CPY-001",
+    "Name": "Document Photocopy",
+    "Description": "Photocopy service per page.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000026": {
+    "Id": "00000003-0000-0000-0000-000000000026",
+    "Version": 1,
+    "Code": "SCN-001",
+    "Name": "Document Scanning",
+    "Description": "Document scanning service.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000027": {
+    "Id": "00000003-0000-0000-0000-000000000027",
+    "Version": 1,
+    "Code": "POD-001",
+    "Name": "Proof of Delivery",
+    "Description": "Proof-of-delivery record service.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000028": {
+    "Id": "00000003-0000-0000-0000-000000000028",
+    "Version": 1,
+    "Code": "SMS-001",
+    "Name": "SMS Tracking Alerts",
+    "Description": "Shipment status notification add-on.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000029": {
+    "Id": "00000003-0000-0000-0000-000000000029",
+    "Version": 1,
+    "Code": "WGT-001",
+    "Name": "Weight Recheck",
+    "Description": "Counter weight verification.",
+    "Availability": 0
+  },
+  "00000003000000000000000000000030": {
+    "Id": "00000003-0000-0000-0000-000000000030",
+    "Version": 1,
+    "Code": "HND-001",
+    "Name": "Special Handling",
+    "Description": "Eligible special-handling service.",
+    "Availability": 0
   }
 }

@@ -11,6 +11,9 @@ body { min-height: 100vh; margin: 0; color: #172033; background: #f5f7fb; font-f
 .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
 .status-card { min-height: 10rem; padding: 1.5rem; border: 1px solid #d7e1ed; border-radius: .75rem; background: #fff; box-shadow: 0 .25rem .75rem rgb(16 42 67 / 8%); }
 .status-card h2 { font-size: 1rem; font-weight: 700; }
+.offline-status { display: none; margin: 1rem auto 0; max-width: 52rem; padding: .75rem 1rem; border-radius: .5rem; border: 1px solid #d7e1ed; background: #eef7ff; color: #0d3a5b; }
+.offline-status.is-offline { display: block; border-color: #f2c29b; background: #fff4e5; color: #7a4b00; }
+.offline-status.is-unsupported { display: block; border-color: #d3d8e1; background: #f3f5f7; color: #475569; }
 .footer { padding: 1.25rem 0; color: #dce8f2; background: #102a43; }
 .footer a { color: #dce8f2; }
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus { box-shadow: 0 0 0 .2rem #bce3ff; }

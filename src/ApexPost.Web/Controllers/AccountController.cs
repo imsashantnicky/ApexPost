@@ -42,14 +42,15 @@ public sealed class AccountController(LocalAccountService accounts) : Controller
         };
 
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
-        return RedirectToAction("Index", "Dashboard");
+        return RedirectToAction(LocalAccountService.GetDashboardAction(account.Role), "Dashboard");
     }
     [HttpPost, ValidateAntiForgeryToken] public async Task<IActionResult> Logout() { await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme); return RedirectToAction(nameof(Login)); }
     [HttpGet] public IActionResult AccessDenied() => View();
     [Authorize(Policy = "AdministratorOnly")]
     [HttpGet] public IActionResult Provision() => View(new ProvisionAccountViewModel());
     [Authorize(Policy = "AdministratorOnly")]
-    [HttpPost] public async Task<IActionResult> Provision(ProvisionAccountViewModel model, CancellationToken token)
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Provision(ProvisionAccountViewModel model, CancellationToken token)
     {
         if (!ModelState.IsValid) return View(model);
         if (!await accounts.CreateAsync(model.UserName, model.Password, model.Role, token))
