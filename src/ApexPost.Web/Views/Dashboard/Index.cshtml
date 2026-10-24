@@ -1,0 +1,25 @@
+@model ApexPost.Web.Models.DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<section class="dashboard-intro" aria-labelledby="dashboard-title">
+    <p class="eyebrow">Retail counter platform</p>
+    <h1 id="dashboard-title">Operations dashboard</h1>
+    <p>Use the navigation to manage counter operations as modules become available.</p>
+</section>
+
+<section class="status-grid" aria-label="Application status">
+    <article class="status-card">
+        <h2>Environment</h2>
+        <p>@Model.EnvironmentName</p>
+    </article>
+    <article class="status-card">
+        <h2>Demonstration data</h2>
+        <p>@(Model.DemonstrationDataEnabled ? "Enabled for an empty development data directory" : "Disabled")</p>
+    </article>
+    <article class="status-card">
+        <h2>Counter workflows</h2>
+        <p>Available through the application services and ready for MVC screens.</p>
+    </article>
+</section>
