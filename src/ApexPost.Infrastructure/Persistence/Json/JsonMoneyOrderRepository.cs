@@ -8,6 +8,7 @@ public sealed class JsonMoneyOrderRepository : IMoneyOrderRepository
 {
     private readonly JsonCollectionStore<Data> store;
     public JsonMoneyOrderRepository(JsonDataOptions options) => store = new(options.DataDirectory, "money-orders.json");
+    public async Task<IReadOnlyList<Versioned<MoneyOrder>>> ListAsync(CancellationToken cancellationToken) => (await store.ReadAllAsync(cancellationToken)).Values.Select(ToDomain).ToArray();
     public async Task<Versioned<MoneyOrder>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken) => (await store.ReadAllAsync(cancellationToken)).TryGetValue(id.Value.ToString("N"), out var x) ? ToDomain(x) : null;
     public async Task<bool> TryAddAsync(MoneyOrder moneyOrder, CancellationToken cancellationToken) { var all = await store.ReadAllAsync(cancellationToken); return all.Values.Any(x => x.Number == moneyOrder.OrderNumber.Value) ? false : await store.TryAddAsync(moneyOrder.Id.Value.ToString("N"), ToData(moneyOrder, 1), cancellationToken); }
     public Task<bool> TryUpdateAsync(MoneyOrder moneyOrder, long expectedVersion, CancellationToken cancellationToken) => store.TryReplaceAsync(moneyOrder.Id.Value.ToString("N"), ToData(moneyOrder, expectedVersion + 1), x => x.Version == expectedVersion, cancellationToken);

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -44,6 +44,7 @@
             </div>
         </nav>
     </header>
+    <div id="offline-status" class="offline-status" role="status" aria-live="polite"></div>
     <div class="container page-content">
         <main role="main" class="pb-3">
             @RenderBody()
@@ -57,6 +58,7 @@
     </footer>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/apexpost-browser-storage.js" asp-append-version="true"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

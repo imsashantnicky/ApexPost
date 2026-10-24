@@ -152,6 +152,7 @@ public class OperationalUseCaseTests
     private sealed class MoneyOrderRepositoryDouble : IMoneyOrderRepository
     {
         private readonly Dictionary<Guid, Versioned<MoneyOrder>> items = [];
+        public Task<IReadOnlyList<Versioned<MoneyOrder>>> ListAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Versioned<MoneyOrder>>>(items.Values.ToArray());
         public Task<Versioned<MoneyOrder>?> GetByIdAsync(EntityId id, CancellationToken cancellationToken) => Task.FromResult(items.GetValueOrDefault(id.Value));
         public Task<bool> TryAddAsync(MoneyOrder item, CancellationToken cancellationToken) { if (items.Values.Any(value => value.Value.OrderNumber == item.OrderNumber)) return Task.FromResult(false); items[item.Id.Value] = new(item, 1); return Task.FromResult(true); }
         public Task<bool> TryUpdateAsync(MoneyOrder item, long expectedVersion, CancellationToken cancellationToken) { if (!items.TryGetValue(item.Id.Value, out var current) || current.Version != expectedVersion) return Task.FromResult(false); items[item.Id.Value] = new(item, expectedVersion + 1); return Task.FromResult(true); }

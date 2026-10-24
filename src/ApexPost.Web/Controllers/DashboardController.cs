@@ -19,8 +19,23 @@ public sealed class DashboardController : Controller
     }
 
     [HttpGet("")]
-    public IActionResult Index()
-    {
-        return View(new DashboardViewModel(environment.EnvironmentName, seedOptions.Enabled));
-    }
+    [HttpGet("index")]
+    public IActionResult Index() => ViewDashboard();
+
+    [HttpGet("admin")]
+    public IActionResult Admin() => ViewDashboard();
+
+    [HttpGet("branch")]
+    public IActionResult Branch() => ViewDashboard();
+
+    [HttpGet("counter")]
+    public IActionResult Counter() => ViewDashboard();
+
+    [HttpGet("inventory")]
+    public IActionResult Inventory() => ViewDashboard();
+
+    [HttpGet("auditor")]
+    public IActionResult Auditor() => ViewDashboard();
+
+    private ViewResult ViewDashboard() => View("Index", new DashboardViewModel(environment.EnvironmentName, seedOptions.Enabled));
 }

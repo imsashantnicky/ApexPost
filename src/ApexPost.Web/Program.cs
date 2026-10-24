@@ -1,20 +1,26 @@
-using ApexPost.Infrastructure.Persistence.Json;
-using ApexPost.Web.Services;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using ApexPost.Application.Branches;
 using ApexPost.Application.Catalogue;
-using ApexPost.Application.Staff;
 using ApexPost.Application.Inventory;
+using ApexPost.Application.MoneyOrders;
+using ApexPost.Application.Reporting;
 using ApexPost.Application.Shipping;
+using ApexPost.Application.Staff;
 using ApexPost.Application.Transactions;
+using ApexPost.Infrastructure.Persistence.Json;
+using ApexPost.Web.Health;
+using ApexPost.Web.Middleware;
+using ApexPost.Web.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddCheck<SafeReadinessCheck>("ready")
+    .AddCheck<SafeLivenessCheck>("live");
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -23,21 +29,26 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.Name = "ApexPost.Auth";
         options.Cookie.HttpOnly = true;
         options.Cookie.IsEssential = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
     });
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("Management", policy => policy.RequireRole("Administrator", "BranchManager"));
-    options.AddPolicy("AdministratorOnly", policy => policy.RequireRole("Administrator"));
+    options.AddPolicy("Management", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.CounterStaffRole, LocalAccountService.InventoryStaffRole));
+    options.AddPolicy("AdministratorOnly", policy => policy.RequireRole(LocalAccountService.AdministratorRole));
+    options.AddPolicy("BranchManagement", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole));
+    options.AddPolicy("CounterOperations", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.CounterStaffRole));
+    options.AddPolicy("InventoryOperations", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.InventoryStaffRole));
+    options.AddPolicy("ReportsAccess", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.AuditorRole));
+    options.AddPolicy("AuditorReadOnly", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.AuditorRole));
 });
 builder.Services.AddAntiforgery(options =>
 {
     options.Cookie.Name = "ApexPost.Antiforgery";
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
 builder.Services.AddRateLimiter(options => options.AddFixedWindowLimiter("login", limiter => { limiter.PermitLimit = 5; limiter.Window = TimeSpan.FromMinutes(1); limiter.QueueLimit = 0; }));
@@ -59,10 +70,14 @@ builder.Services.AddTransient<BranchManagementUseCase>();
 builder.Services.AddTransient<StaffManagementUseCase>();
 builder.Services.AddTransient<CatalogueManagementUseCase>();
 builder.Services.AddSingleton<IInventoryItemRepository, JsonInventoryItemRepository>();
+builder.Services.AddSingleton<IMoneyOrderRepository, JsonMoneyOrderRepository>();
+builder.Services.AddSingleton<IRetailTransactionRepository, JsonRetailTransactionRepository>();
 builder.Services.AddSingleton<IShipmentRepository, JsonShipmentRepository>();
 builder.Services.AddSingleton<IServicePriceLookup, JsonServicePriceLookup>();
 builder.Services.AddTransient<InventoryOperationsUseCase>();
 builder.Services.AddTransient<ShipmentOperationsUseCase>();
+builder.Services.AddTransient<MoneyOrderOperationsUseCase>();
+builder.Services.AddTransient<OperationalReportService>();
 
 var app = builder.Build();
 
@@ -79,6 +94,7 @@ else
 }
 
 app.UseHttpsRedirection();
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseRouting();
 app.UseCookiePolicy();
 
@@ -88,6 +104,8 @@ app.UseAuthorization();
 
 app.MapStaticAssets();
 app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/ready");
+app.MapHealthChecks("/health/live");
 
 app.MapControllerRoute(
     name: "default",
