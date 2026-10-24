@@ -1,0 +1,5 @@
+@model IReadOnlyList<ApexPost.Application.Branches.BranchResponse>
+@{ ViewData["Title"] = "Branches"; }
+<h1>Branches</h1><p><a class="btn btn-primary" asp-action="Create">Create branch</a></p>
+@if (TempData["Error"] is string error) { <p class="text-danger" role="alert">@error</p> }
+@if (!Model.Any()) { <p>No branches are available.</p> } else { <table class="table"><thead><tr><th>Code</th><th>Name</th><th>Status</th><th></th></tr></thead><tbody>@foreach (var item in Model) { <tr><td>@item.Code</td><td>@item.Name</td><td>@item.Status</td><td><a asp-action="Edit" asp-route-id="@item.Id">Edit</a> @if (item.Status == ApexPost.Domain.Branches.BranchStatus.Active) { <form asp-action="Deactivate" method="post"><input type="hidden" name="id" value="@item.Id" /><input type="hidden" name="version" value="@item.Version" /><button class="btn btn-outline-danger">Deactivate</button></form> }</td></tr> }</tbody></table> }

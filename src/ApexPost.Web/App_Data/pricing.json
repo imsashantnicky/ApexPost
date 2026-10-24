@@ -1,0 +1,12 @@
+{
+  "EXP-001": {
+    "ServiceCode": "EXP-001",
+    "Amount": 125.50,
+    "CurrencyCode": "INR"
+  },
+  "REG-001": {
+    "ServiceCode": "REG-001",
+    "Amount": 45.00,
+    "CurrencyCode": "INR"
+  }
+}

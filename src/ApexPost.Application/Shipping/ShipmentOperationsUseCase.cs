@@ -1,23 +1,33 @@
 using ApexPost.Application.Results;
 using ApexPost.Domain.Common;
 using ApexPost.Domain.Shipping;
+using ApexPost.Application.Transactions;
 
 namespace ApexPost.Application.Shipping;
 
 public sealed class ShipmentOperationsUseCase
 {
     private readonly IShipmentRepository repository;
-    public ShipmentOperationsUseCase(IShipmentRepository repository) => this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
+    private readonly IServicePriceLookup prices;
+    public ShipmentOperationsUseCase(IShipmentRepository repository, IServicePriceLookup prices)
+    {
+        this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        this.prices = prices ?? throw new ArgumentNullException(nameof(prices));
+    }
 
     public async Task<ApplicationResult<ShipmentResponse>> BookAsync(BookShipmentRequest request, CancellationToken cancellationToken)
     {
         if (request is null || !TryId(request.ServiceId, out var serviceId)) return Invalid<ShipmentResponse>();
         try
         {
+            var charge = new ShipmentCharge(request.ChargeAmount, request.CurrencyCode);
+            var price = await prices.GetCurrentPriceAsync(serviceId, request.CurrencyCode, cancellationToken);
+            if (price is null) return ApplicationResults.Failure<ShipmentResponse>([new("service.unavailable", "The selected service is unavailable or has no current price.", "serviceId")]);
+            if (price.Amount != request.ChargeAmount) return ApplicationResults.Failure<ShipmentResponse>([new("charge.invalid", "Shipment charge must match the current service price.", "chargeAmount")]);
             var shipment = new Shipment(EntityId.New(), ShipmentNumber.From(request.ShipmentNumber),
                 Party(request.SenderName, request.SenderAddressLine1, request.SenderCity, request.SenderPostalCode, request.SenderCountryCode),
                 Party(request.RecipientName, request.RecipientAddressLine1, request.RecipientCity, request.RecipientPostalCode, request.RecipientCountryCode),
-                serviceId, new ShipmentPackage(request.WeightKilograms, request.ContentsDescription), new ShipmentCharge(request.ChargeAmount, request.CurrencyCode));
+                serviceId, new ShipmentPackage(request.WeightKilograms, request.ContentsDescription), charge);
             if (!await repository.TryAddAsync(shipment, cancellationToken)) return Duplicate<ShipmentResponse>("shipmentNumber");
             return ApplicationResults.Success(ToResponse(shipment, 1));
         }
@@ -30,6 +40,8 @@ public sealed class ShipmentOperationsUseCase
         var shipment = await repository.GetByIdAsync(id, cancellationToken);
         return shipment is null ? NotFound<ShipmentResponse>() : ApplicationResults.Success(ToResponse(shipment.Value, shipment.Version));
     }
+
+    public async Task<IReadOnlyList<ShipmentResponse>> ListAsync(CancellationToken cancellationToken) => (await repository.ListAsync(cancellationToken)).Select(item => ToResponse(item.Value, item.Version)).ToArray();
 
     public Task<ApplicationResult<ShipmentResponse>> AcceptAsync(Guid id, long version, CancellationToken token) => ChangeAsync(id, version, static shipment => shipment.Accept(), token);
     public Task<ApplicationResult<ShipmentResponse>> DispatchAsync(Guid id, long version, CancellationToken token) => ChangeAsync(id, version, static shipment => shipment.Dispatch(), token);

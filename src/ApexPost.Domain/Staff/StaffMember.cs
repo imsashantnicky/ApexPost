@@ -79,6 +79,15 @@ public sealed class StaffMember
         Status = EmploymentStatus.Terminated;
     }
 
+    public static StaffMember Restore(EntityId id, EmployeeNumber employeeNumber, string name, EntityId branchId, IEnumerable<StaffRole> roles, EmploymentStatus status)
+    {
+        var staffMember = new StaffMember(id, employeeNumber, name, branchId, roles);
+        if (status == EmploymentStatus.Suspended) staffMember.Suspend();
+        else if (status == EmploymentStatus.Terminated) staffMember.Terminate();
+        else if (status != EmploymentStatus.Active) throw new DomainException("Employment status must be recognized.");
+        return staffMember;
+    }
+
     private static string RequiredName(string name)
     {
         var normalizedName = name?.Trim();

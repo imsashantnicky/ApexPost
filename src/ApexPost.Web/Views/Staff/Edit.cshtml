@@ -1,0 +1,3 @@
+@model ApexPost.Web.Models.StaffForm
+@{ ViewData["Title"] = "Edit staff"; }
+<h1>Edit staff member</h1><form method="post">@Html.AntiForgeryToken()<input asp-for="Id" type="hidden"/><input asp-for="Version" type="hidden"/><label asp-for="EmployeeNumber"></label><input asp-for="EmployeeNumber" class="form-control" readonly/><label asp-for="Name"></label><input asp-for="Name" class="form-control"/><label asp-for="BranchId"></label><input asp-for="BranchId" class="form-control"/><label asp-for="Role"></label><select asp-for="Role" class="form-select"><option>CounterClerk</option><option>BranchManager</option><option>Administrator</option></select><button class="btn btn-primary mt-3">Save changes</button></form>

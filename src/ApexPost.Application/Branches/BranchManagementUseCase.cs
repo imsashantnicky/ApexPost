@@ -44,6 +44,11 @@ public sealed class BranchManagementUseCase
         return result is null ? NotFound<BranchResponse>("branchId") : ApplicationResults.Success(ToResponse(result.Value, result.Version));
     }
 
+    public async Task<IReadOnlyList<BranchResponse>> ListAsync(CancellationToken cancellationToken)
+    {
+        return (await repository.ListAsync(cancellationToken)).Select(item => ToResponse(item.Value, item.Version)).OrderBy(item => item.Code).ToArray();
+    }
+
     public async Task<ApplicationResult<BranchResponse>> UpdateAsync(UpdateBranchRequest request, CancellationToken cancellationToken)
     {
         if (request is null) return InvalidRequest<BranchResponse>();

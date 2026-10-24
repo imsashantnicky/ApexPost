@@ -70,6 +70,15 @@ public sealed class Branch
         Status = BranchStatus.Closed;
     }
 
+    public static Branch Restore(EntityId id, BranchCode code, string name, BranchAddress address, int counterCount, BranchStatus status)
+    {
+        var branch = new Branch(id, code, name, address, counterCount);
+        if (status == BranchStatus.Suspended) branch.Suspend();
+        else if (status == BranchStatus.Closed) branch.Close();
+        else if (status != BranchStatus.Active) throw new DomainException("Branch status must be recognized.");
+        return branch;
+    }
+
     private static string RequiredName(string name)
     {
         var normalizedName = name?.Trim();

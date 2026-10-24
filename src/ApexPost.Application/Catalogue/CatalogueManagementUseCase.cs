@@ -28,6 +28,11 @@ public sealed class CatalogueManagementUseCase
         return result is null ? NotFound<ServiceResponse>() : ApplicationResults.Success(ToResponse(result.Value, result.Version));
     }
 
+    public async Task<IReadOnlyList<ServiceResponse>> ListAsync(CancellationToken cancellationToken)
+    {
+        return (await repository.ListAsync(cancellationToken)).Select(item => ToResponse(item.Value, item.Version)).OrderBy(item => item.Code).ToArray();
+    }
+
     public async Task<ApplicationResult<ServiceResponse>> UpdateAsync(UpdateServiceRequest request, CancellationToken cancellationToken)
     {
         if (request is null || !TryId(request.ServiceId, out var id) || request.ExpectedVersion < 1) return Invalid<ServiceResponse>();

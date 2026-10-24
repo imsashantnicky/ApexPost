@@ -72,6 +72,23 @@ public sealed class InventoryItem
         ApplyMovement(type, quantityChange, reason, occurredAt);
     }
 
+    public static InventoryItem Restore(EntityId id, EntityId branchId, InventorySku sku, string name, int reorderLevel, IEnumerable<(StockMovementType Type, int QuantityChange, string Reason, DateTimeOffset OccurredAt)> history)
+    {
+        var item = new InventoryItem(id, branchId, sku, name, reorderLevel);
+        foreach (var movement in history)
+        {
+            switch (movement.Type)
+            {
+                case StockMovementType.Receipt: item.Receive(movement.QuantityChange, movement.Reason, movement.OccurredAt); break;
+                case StockMovementType.Issue: item.Issue(-movement.QuantityChange, movement.Reason, movement.OccurredAt); break;
+                case StockMovementType.AdjustmentIncrease:
+                case StockMovementType.AdjustmentDecrease: item.AdjustTo(item.QuantityOnHand + movement.QuantityChange, movement.Reason, movement.OccurredAt); break;
+                default: throw new DomainException("Stock movement type must be recognized.");
+            }
+        }
+        return item;
+    }
+
     private void ApplyMovement(StockMovementType type, int quantityChange, string reason, DateTimeOffset occurredAt)
     {
         var normalizedReason = reason?.Trim();

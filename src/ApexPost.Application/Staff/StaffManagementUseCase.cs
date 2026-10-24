@@ -28,6 +28,11 @@ public sealed class StaffManagementUseCase
         return result is null ? NotFound<StaffResponse>() : ApplicationResults.Success(ToResponse(result.Value, result.Version));
     }
 
+    public async Task<IReadOnlyList<StaffResponse>> ListAsync(CancellationToken cancellationToken)
+    {
+        return (await repository.ListAsync(cancellationToken)).Select(item => ToResponse(item.Value, item.Version)).OrderBy(item => item.EmployeeNumber).ToArray();
+    }
+
     public async Task<ApplicationResult<StaffResponse>> UpdateAsync(UpdateStaffRequest request, CancellationToken cancellationToken)
     {
         if (request is null || !TryId(request.StaffId, out var id) || !TryId(request.BranchId, out var branchId) || request.ExpectedVersion < 1) return Invalid<StaffResponse>();

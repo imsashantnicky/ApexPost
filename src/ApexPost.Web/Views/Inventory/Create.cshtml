@@ -1,0 +1,3 @@
+@model ApexPost.Web.Models.InventoryForm
+@{ ViewData["Title"] = "Create inventory item"; }
+<h1>Create inventory item</h1><form method="post">@Html.AntiForgeryToken()<div asp-validation-summary="ModelOnly" class="text-danger" role="alert"></div><label asp-for="BranchId"></label><input asp-for="BranchId" class="form-control"/><label asp-for="Sku"></label><input asp-for="Sku" class="form-control"/><label asp-for="Name"></label><input asp-for="Name" class="form-control"/><label asp-for="ReorderLevel"></label><input asp-for="ReorderLevel" class="form-control"/><button class="btn btn-primary mt-3">Save</button></form>

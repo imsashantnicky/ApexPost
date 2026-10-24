@@ -1,0 +1,3 @@
+@model IReadOnlyList<ApexPost.Application.Catalogue.ServiceResponse>
+@{ ViewData["Title"] = "Catalogue"; }
+<h1>Service catalogue</h1><p><a class="btn btn-primary" asp-action="Create">Create service</a></p>@if (!Model.Any()) { <p>No services are available.</p> } else { <table class="table"><thead><tr><th>Code</th><th>Name</th><th>Status</th><th></th></tr></thead><tbody>@foreach(var item in Model){<tr><td>@item.Code</td><td>@item.Name</td><td>@item.Availability</td><td><a asp-action="Edit" asp-route-id="@item.Id">Edit</a><form asp-action="Deactivate" method="post"><input type="hidden" name="id" value="@item.Id"/><input type="hidden" name="version" value="@item.Version"/><button class="btn btn-outline-danger">Deactivate</button></form></td></tr>}</tbody></table>}
