@@ -506,6 +506,92 @@ Configure other roles only when needed. Use unique local passwords and never reu
 
 Production startup must not create development accounts from development-only settings.
 
+
+## First-user provisioning
+
+The application does not ship with a default production account or embedded password.
+
+On a clean system, before any local account exists, open:
+
+```text
+https://localhost:5100/Account/Bootstrap
+```
+
+Create the first administrator account with a strong password (12+ characters, unique to that environment). The bootstrap page is only available while no accounts exist.
+
+After the first login:
+
+- Create additional users from `/Account/Provision`.
+- Use the least privileged role needed for each user.
+- Roles are limited to `Administrator`, `BranchManager`, and `CounterClerk`.
+- Use a dedicated admin account rather than a shared or personal account.
+
+## Authentication and authorization
+
+- ASP.NET Core cookie authentication is used for MVC sign-in.
+- Passwords are never stored in plaintext; the app persists only PasswordHasher output.
+- Login is protected by rate limiting and antiforgery tokens.
+- Cookies are `HttpOnly`, secure-only, and configured for HTTPS use.
+- Access control uses role policies for management and administrator-only actions.
+- Unauthorized users are redirected to `/Account/AccessDenied`.
+
+### Supported roles and permissions
+
+ApexPost supports five application roles:
+
+| Role | Purpose | Typical access |
+| --- | --- | --- |
+| `Administrator` | Full administration and provisioning | Full management access, user provisioning, and report access |
+| `BranchManager` | Branch operations lead | Branch and staff management, inventory, operational workflows |
+| `CounterStaff` | Counter sales and service desk | Transactions, payments, shipments, counter operations |
+| `InventoryStaff` | Warehouse and stock handling | Inventory movement, receiving, issuing, stock actions |
+| `Auditor` | Read-only monitoring and review | Reports, audit records, non-mutating review only |
+
+The `Auditor` role is intentionally read-only and cannot access state-changing controllers or actions.
+
+### Development accounts and secure provisioning
+
+The project does not ship a default username or password. Each environment must be provisioned explicitly.
+
+For local development, enable development role accounts through configuration or user secrets and set one username/password pair per role. The app only creates the configured accounts when `ApexPost:DevelopmentAccounts:Enabled=true` and the environment is `Development`.
+
+Example PowerShell values:
+
+```powershell
+# One-time local values in user secrets or environment variables
+$env:ApexPost__DevelopmentAccounts__Enabled = "true"
+$env:ApexPost__DevelopmentAccounts__Administrator__UserName = "admin.dev"
+$env:ApexPost__DevelopmentAccounts__Administrator__Password = "ChangeThis-StrongDevPass-123!"
+$env:ApexPost__DevelopmentAccounts__BranchManager__UserName = "branch.dev"
+$env:ApexPost__DevelopmentAccounts__BranchManager__Password = "ChangeThis-StrongDevPass-456!"
+$env:ApexPost__DevelopmentAccounts__CounterStaff__UserName = "counter.dev"
+$env:ApexPost__DevelopmentAccounts__CounterStaff__Password = "ChangeThis-StrongDevPass-789!"
+$env:ApexPost__DevelopmentAccounts__InventoryStaff__UserName = "inventory.dev"
+$env:ApexPost__DevelopmentAccounts__InventoryStaff__Password = "ChangeThis-StrongDevPass-101!"
+$env:ApexPost__DevelopmentAccounts__Auditor__UserName = "auditor.dev"
+$env:ApexPost__DevelopmentAccounts__Auditor__Password = "ChangeThis-StrongDevPass-202!"
+```
+
+Equivalent user-secrets configuration:
+
+```powershell
+dotnet user-secrets set "ApexPost:DevelopmentAccounts:Enabled" "true"
+dotnet user-secrets set "ApexPost:DevelopmentAccounts:Administrator:UserName" "admin.dev"
+dotnet user-secrets set "ApexPost:DevelopmentAccounts:Administrator:Password" "ChangeThis-StrongDevPass-123!"
+# Repeat for BranchManager, CounterStaff, InventoryStaff, and Auditor.
+```
+
+The app will create each configured account once and never overwrite an existing account or password. If a role is configured without both `UserName` and `Password`, startup fails with a clear error. In production, startup skips development account initialization entirely.
+
+### Portal login
+
+- URL: `https://localhost:5100/Account/Login` (or the configured local URL)
+- Sign in with a valid user name and password for the role you created.
+- After successful login, the app redirects to a role-specific dashboard route such as `/dashboard/admin`, `/dashboard/branch`, `/dashboard/counter`, `/dashboard/inventory`, or `/dashboard/auditor`.
+- New accounts are provisioned by an Administrator from `/Account/Provision`.
+- Only Administrators can assign roles or create users.
+
+
 ---
 
 ## 12. JSON Persistence
