@@ -49,6 +49,22 @@ public sealed class AuditActionFilter(
                 ["CorrelationId"] = httpContext.TraceIdentifier
             };
 
+            // Record authorization context without capturing request data or personal information.
+            var actorRole = httpContext.User.FindFirstValue(ClaimTypes.Role);
+            if (!string.IsNullOrWhiteSpace(actorRole))
+            {
+                metadata["ActorRole"] = actorRole;
+            }
+
+            var branchId = httpContext.User.FindFirst("branch_id")?.Value
+                ?? httpContext.User.FindFirst("BranchId")?.Value;
+            if (!string.IsNullOrWhiteSpace(branchId)
+                && branchId.Length <= 64
+                && branchId.All(static character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_'))
+            {
+                metadata["BranchId"] = branchId;
+            }
+
             try
             {
                 var actorId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
