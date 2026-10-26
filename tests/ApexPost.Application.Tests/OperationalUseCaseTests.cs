@@ -92,14 +92,16 @@ public class OperationalUseCaseTests
         Assert.Equal("domain.rule", Assert.Single(invalid.Errors).Code);
     }
 
-    [Fact]
-    public async Task ShipmentBookingRejectsInvalidRequest()
-    {
-        var request = ShipmentRequest("SHP-000001") with { ChargeAmount = 0m };
-        var result = await NewShipmentUseCase(new ShipmentRepositoryDouble()).BookAsync(request, default);
+ 
+[Fact]
+public async Task ShipmentBookingRejectsInvalidRequest()
+{
+    var request = ShipmentRequest("SHP-000001") with { ChargeAmount = 0m };
+    var result = await NewShipmentUseCase(new ShipmentRepositoryDouble())
+        .BookAsync(request, default);
 
-        Assert.Equal("domain.rule", Assert.Single(result.Errors).Code);
-    }
+    Assert.Equal("charge.invalid", Assert.Single(result.Errors).Code);
+}
 
     [Fact]
     public async Task ShipmentBookingUsesTheConfiguredZoneAndServiceLevelRate()
