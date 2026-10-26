@@ -20,10 +20,16 @@ public sealed class AuditActionFilter(
     {
         var stopwatch = Stopwatch.StartNew();
         ActionExecutedContext? executed = null;
+        var actionFailed = false;
 
         try
         {
             executed = await next();
+        }
+        catch
+        {
+            actionFailed = true;
+            throw;
         }
         finally
         {
@@ -32,7 +38,9 @@ public sealed class AuditActionFilter(
             var httpContext = context.HttpContext;
             var controller = context.RouteData.Values["controller"]?.ToString() ?? "Unknown";
             var action = context.RouteData.Values["action"]?.ToString() ?? "Unknown";
-            var statusCode = GetStatusCode(executed, httpContext.Response.StatusCode);
+            var statusCode = actionFailed
+                ? StatusCodes.Status500InternalServerError
+                : GetStatusCode(executed, httpContext.Response.StatusCode);
             var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["HttpMethod"] = httpContext.Request.Method,
