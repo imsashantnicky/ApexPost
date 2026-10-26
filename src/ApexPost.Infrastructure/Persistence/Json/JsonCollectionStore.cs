@@ -69,6 +69,21 @@ public sealed class JsonCollectionStore<T>
         finally { fileLock.Release(); }
     }
 
+    /// <summary>Runs one in-process atomic collection mutation under the collection's write lock.</summary>
+    public async Task<TResult> ExecuteAtomicAsync<TResult>(Func<IDictionary<string, T>, (bool ShouldWrite, TResult Result)> mutation, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+        await fileLock.WaitAsync(cancellationToken);
+        try
+        {
+            var items = await ReadUnsafeAsync(cancellationToken);
+            var (shouldWrite, result) = mutation(items);
+            if (shouldWrite) await WriteUnsafeAsync(items, cancellationToken);
+            return result;
+        }
+        finally { fileLock.Release(); }
+    }
+
     private async Task<bool> ChangeAsync(string key, T value, Func<Dictionary<string, T>, string, T, bool> change, CancellationToken cancellationToken)
     {
         ValidateKey(key);

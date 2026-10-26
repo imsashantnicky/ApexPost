@@ -9,13 +9,15 @@ public sealed class MoneyOrder
         MoneyOrderNumber orderNumber,
         MoneyOrderAmount amount,
         EntityId originatingBranchId,
-        MoneyOrderBeneficiary beneficiary)
+        MoneyOrderBeneficiary beneficiary,
+        EntityId? identityVerificationId = null)
     {
         Id = id ?? throw new DomainException("Money order identity is required.");
         OrderNumber = orderNumber ?? throw new DomainException("Money order number is required.");
         Amount = amount ?? throw new DomainException("Money order amount is required.");
         OriginatingBranchId = originatingBranchId ?? throw new DomainException("Originating branch identity is required.");
         Beneficiary = beneficiary ?? throw new DomainException("Money order beneficiary is required.");
+        IdentityVerificationId = identityVerificationId;
         Status = MoneyOrderStatus.Issued;
     }
 
@@ -28,6 +30,8 @@ public sealed class MoneyOrder
     public EntityId OriginatingBranchId { get; }
 
     public MoneyOrderBeneficiary Beneficiary { get; }
+
+    public EntityId? IdentityVerificationId { get; }
 
     public MoneyOrderStatus Status { get; private set; }
 
@@ -46,9 +50,9 @@ public sealed class MoneyOrder
         ChangeStatus(MoneyOrderStatus.Expired, "Only an issued money order can expire.");
     }
 
-    public static MoneyOrder Restore(EntityId id, MoneyOrderNumber orderNumber, MoneyOrderAmount amount, EntityId originatingBranchId, MoneyOrderBeneficiary beneficiary, MoneyOrderStatus status)
+    public static MoneyOrder Restore(EntityId id, MoneyOrderNumber orderNumber, MoneyOrderAmount amount, EntityId originatingBranchId, MoneyOrderBeneficiary beneficiary, MoneyOrderStatus status, EntityId? identityVerificationId = null)
     {
-        var order = new MoneyOrder(id, orderNumber, amount, originatingBranchId, beneficiary);
+        var order = new MoneyOrder(id, orderNumber, amount, originatingBranchId, beneficiary, identityVerificationId);
         if (status == MoneyOrderStatus.Paid) order.MarkPaid();
         else if (status == MoneyOrderStatus.Cancelled) order.Cancel();
         else if (status == MoneyOrderStatus.Expired) order.Expire();

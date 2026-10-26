@@ -87,7 +87,7 @@ public class TransactionOperationsUseCaseTests
         var pending = await fixture.UseCase.StartPaymentAsync(new(transaction.Id, transaction.Version, 10m, PaymentMethod.Cash, "RCPT-1", "payment-attempt-001"), default);
         var paid = await fixture.UseCase.ConfirmPaymentAsync(transaction.Id, pending.Value.Version, default);
         var receipt = await fixture.UseCase.GetReceiptAsync(transaction.Id, default);
-        var reversed = await fixture.UseCase.ReversePaymentAsync(transaction.Id, paid.Value.Version, default);
+        var reversed = await fixture.UseCase.ReversePaymentAsync(transaction.Id, paid.Value.Version, "Customer refund", default);
 
         Assert.Equal(TransactionStatus.Paid, paid.Value.Status);
         Assert.StartsWith("R-", receipt.Value.ReceiptNumber, StringComparison.Ordinal);
@@ -102,21 +102,33 @@ public class TransactionOperationsUseCaseTests
         var transaction = await fixture.CreateWithLineAsync();
         var pending = await fixture.UseCase.StartPaymentAsync(new(transaction.Id, transaction.Version, 10m, PaymentMethod.Card, "CARD-1", "payment-attempt-001"), default);
 
-        var cancelled = await fixture.UseCase.CancelAsync(transaction.Id, pending.Value.Version, default);
+        var cancelled = await fixture.UseCase.CancelAsync(transaction.Id, pending.Value.Version, "Customer withdrew", default);
         var receipt = await fixture.UseCase.GetReceiptAsync(transaction.Id, default);
 
         Assert.Equal(TransactionStatus.Cancelled, cancelled.Value.Status);
         Assert.Equal("transaction.not-paid", Assert.Single(receipt.Errors).Code);
     }
 
+    [Fact]
+    public async Task CounterClerkCannotVoidTransaction()
+    {
+        var fixture = new Fixture(ServicePrice.From(10m, "INR"));
+        var transaction = await fixture.CreateWithLineAsync();
+        fixture.Actor.ChangeRole("CounterStaff");
+        var result = await fixture.UseCase.CancelAsync(transaction.Id, transaction.Version, "Customer withdrew", default);
+        Assert.Equal("access.denied", Assert.Single(result.Errors).Code);
+    }
+
     private sealed class Fixture
     {
+        public MutableActor Actor { get; } = new(Guid.NewGuid(), "Administrator");
+
         public Fixture(ServicePrice? price)
         {
             Repository = new TransactionRepositoryDouble();
             PriceLookup = new PriceLookupDouble(price);
             Coordinator = new PaymentCoordinatorDouble(Repository);
-            UseCase = new TransactionOperationsUseCase(Repository, PriceLookup, Coordinator);
+            UseCase = new TransactionOperationsUseCase(Repository, PriceLookup, Coordinator, OperationalAccessFixture.Create(branchId: Actor.AssignedBranchId, currentActor: Actor));
         }
 
         public TransactionRepositoryDouble Repository { get; }
@@ -126,10 +138,17 @@ public class TransactionOperationsUseCaseTests
 
         public async Task<TransactionResponse> CreateWithLineAsync()
         {
-            var created = await UseCase.CreateAsync(new(Guid.NewGuid(), "Counter 1", "INR"), default);
+            var created = await UseCase.CreateAsync(new(Actor.AssignedBranchId, "Counter 1", "INR"), default);
             var withLine = await UseCase.AddLineAsync(new(created.Value.Id, created.Value.Version, Guid.NewGuid(), "Express parcel", 1), default);
             return withLine.Value;
         }
+    }
+
+    private sealed class MutableActor(Guid assignedBranchId, string role) : ApexPost.Application.Security.ICurrentActor
+    {
+        public ApexPost.Application.Security.ActorContext? Actor { get; private set; } = new(Guid.NewGuid(), role, assignedBranchId, "test-correlation");
+        public Guid AssignedBranchId { get; } = assignedBranchId;
+        public void ChangeRole(string newRole) => Actor = Actor! with { Role = newRole };
     }
 
     private sealed class PriceLookupDouble(ServicePrice? price) : IServicePriceLookup

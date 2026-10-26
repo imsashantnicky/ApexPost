@@ -12,6 +12,21 @@ public sealed class Shipment
         EntityId serviceId,
         ShipmentPackage package,
         ShipmentCharge charge)
+        : this(id, shipmentNumber, sender, recipient, serviceId, package, charge, null)
+    {
+    }
+
+    public Shipment(
+        EntityId id,
+        ShipmentNumber shipmentNumber,
+        ShipmentParty sender,
+        ShipmentParty recipient,
+        EntityId serviceId,
+        ShipmentPackage package,
+        ShipmentCharge charge,
+        EntityId? branchId,
+        string zoneCode = "UNKNOWN",
+        ShippingServiceLevel serviceLevel = ShippingServiceLevel.Standard)
     {
         Id = id ?? throw new DomainException("Shipment identity is required.");
         ShipmentNumber = shipmentNumber ?? throw new DomainException("Shipment number is required.");
@@ -20,6 +35,10 @@ public sealed class Shipment
         ServiceId = serviceId ?? throw new DomainException("Service identity is required.");
         Package = package ?? throw new DomainException("Shipment package is required.");
         Charge = charge ?? throw new DomainException("Shipment charge is required.");
+        BranchId = branchId;
+        ZoneCode = RequiredZoneCode(zoneCode);
+        if (!Enum.IsDefined(serviceLevel)) throw new DomainException("Shipping service level must be recognized.");
+        ServiceLevel = serviceLevel;
         Status = ShipmentStatus.Booked;
     }
 
@@ -36,6 +55,12 @@ public sealed class Shipment
     public ShipmentPackage Package { get; }
 
     public ShipmentCharge Charge { get; }
+
+    public EntityId? BranchId { get; }
+
+    public string ZoneCode { get; }
+
+    public ShippingServiceLevel ServiceLevel { get; }
 
     public ShipmentStatus Status { get; private set; }
 
@@ -65,8 +90,11 @@ public sealed class Shipment
     }
 
     public static Shipment Restore(EntityId id, ShipmentNumber shipmentNumber, ShipmentParty sender, ShipmentParty recipient, EntityId serviceId, ShipmentPackage package, ShipmentCharge charge, ShipmentStatus status)
+        => Restore(id, shipmentNumber, sender, recipient, serviceId, package, charge, status, null);
+
+    public static Shipment Restore(EntityId id, ShipmentNumber shipmentNumber, ShipmentParty sender, ShipmentParty recipient, EntityId serviceId, ShipmentPackage package, ShipmentCharge charge, ShipmentStatus status, EntityId? branchId, string zoneCode = "UNKNOWN", ShippingServiceLevel serviceLevel = ShippingServiceLevel.Standard)
     {
-        var shipment = new Shipment(id, shipmentNumber, sender, recipient, serviceId, package, charge);
+        var shipment = new Shipment(id, shipmentNumber, sender, recipient, serviceId, package, charge, branchId, zoneCode, serviceLevel);
         if (status == ShipmentStatus.Accepted) shipment.Accept();
         else if (status == ShipmentStatus.InTransit) { shipment.Accept(); shipment.Dispatch(); }
         else if (status == ShipmentStatus.Delivered) { shipment.Accept(); shipment.Dispatch(); shipment.Deliver(); }
@@ -83,5 +111,13 @@ public sealed class Shipment
         }
 
         Status = targetStatus;
+    }
+
+    private static string RequiredZoneCode(string zoneCode)
+    {
+        var normalized = zoneCode?.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 20 || normalized.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '-'))
+            throw new DomainException("Shipping zone code must contain only letters, digits, or hyphens and be no longer than 20 characters.");
+        return normalized;
     }
 }

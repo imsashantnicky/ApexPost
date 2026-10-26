@@ -1,0 +1,19 @@
+@model ApexPost.Web.Models.TransactionCreateForm
+@{ ViewData["Title"] = "New counter transaction"; }
+<div class="page-heading"><div><p class="eyebrow">Counter</p><h1>New transaction</h1><p class="text-secondary">Create a basket for one branch. Branch scope is checked again by the Application service.</p></div></div>
+<div class="card form-card"><div class="card-body"><form asp-action="Create" method="post">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+    @if (User.IsInRole("Administrator"))
+    {
+        <div class="mb-3"><label asp-for="BranchId" class="form-label">Branch</label><select asp-for="BranchId" class="form-select"><option value="">Choose branch</option>@foreach (var branch in Model.Branches) { <option value="@branch.Id">@branch.Name</option> }</select><span asp-validation-for="BranchId" class="text-danger"></span></div>
+    }
+    else
+    {
+        var assigned = Model.Branches.FirstOrDefault();
+        <input asp-for="BranchId" type="hidden" />
+        <div class="mb-3"><label class="form-label">Assigned branch</label><input class="form-control" value="@(assigned?.Name ?? "Unavailable")" readonly /></div>
+    }
+    <div class="mb-3"><label asp-for="CounterReference" class="form-label">Counter reference</label><input asp-for="CounterReference" class="form-control" autocomplete="off"/><span asp-validation-for="CounterReference" class="text-danger"></span></div>
+    <div class="mb-3"><label asp-for="CurrencyCode" class="form-label">Currency code</label><input asp-for="CurrencyCode" class="form-control"/><span asp-validation-for="CurrencyCode" class="text-danger"></span></div>
+    <button type="submit" class="btn btn-primary">Open basket</button> <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+</form></div></div>

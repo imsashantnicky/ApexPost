@@ -4,11 +4,14 @@ namespace ApexPost.Domain.Shipping;
 
 public sealed class ShipmentPackage : ValueObject
 {
-    public ShipmentPackage(decimal weightKilograms, string contentsDescription)
+    public const decimal MaximumWeightKilograms = 70m;
+
+    public ShipmentPackage(decimal weightKilograms, string contentsDescription, decimal maximumWeightKilograms = MaximumWeightKilograms)
     {
-        if (weightKilograms <= 0 || decimal.Round(weightKilograms, 3) != weightKilograms)
+        if (maximumWeightKilograms <= 0) throw new DomainException("Maximum package weight must be greater than zero.");
+        if (weightKilograms <= 0 || weightKilograms > maximumWeightKilograms || decimal.Round(weightKilograms, 3) != weightKilograms)
         {
-            throw new DomainException("Package weight must be greater than zero and have no more than three decimal places.");
+            throw new DomainException($"Package weight must be greater than zero, no more than {maximumWeightKilograms} kilograms, and have no more than three decimal places.");
         }
 
         var normalizedDescription = contentsDescription?.Trim();

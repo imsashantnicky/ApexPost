@@ -1,20 +1,19 @@
-using ApexPost.Application.Branches;
-using ApexPost.Application.Catalogue;
-using ApexPost.Application.Inventory;
-using ApexPost.Application.MoneyOrders;
-using ApexPost.Application.Reporting;
-using ApexPost.Application.Shipping;
+using System.Net;
+using System.Threading.RateLimiting;
 using ApexPost.Application.Staff;
-using ApexPost.Application.Transactions;
 using ApexPost.Infrastructure.Persistence.Json;
-using ApexPost.Web.Health;
+using ApexPost.Web.Extensions;
 using ApexPost.Web.Filters;
+using ApexPost.Web.Health;
 using ApexPost.Web.Middleware;
+using ApexPost.Web.Security;
 using ApexPost.Web.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,16 +42,21 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
-    });
+    })
+    .AddScheme<AuthenticationSchemeOptions, IntegrationApiKeyAuthenticationHandler>(IntegrationApiKeyDefaults.Scheme, _ => { });
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuthorizationHandler, ValidatedStaffHandler>();
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("Management", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.CounterStaffRole, LocalAccountService.InventoryStaffRole));
-    options.AddPolicy("AdministratorOnly", policy => policy.RequireRole(LocalAccountService.AdministratorRole));
-    options.AddPolicy("BranchManagement", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole));
-    options.AddPolicy("CounterOperations", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.CounterStaffRole));
-    options.AddPolicy("InventoryOperations", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.InventoryStaffRole));
-    options.AddPolicy("ReportsAccess", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.AuditorRole));
-    options.AddPolicy("AuditorReadOnly", policy => policy.RequireRole(LocalAccountService.AdministratorRole, LocalAccountService.AuditorRole));
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser().AddRequirements(new ValidatedStaffRequirement()).Build();
+    AddStaffRolePolicy(options, "AdministratorOnly", LocalAccountService.AdministratorRole);
+    AddStaffRolePolicy(options, "BranchManagement", LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole);
+    AddStaffRolePolicy(options, "CounterOperations", LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.CounterStaffRole);
+    AddStaffRolePolicy(options, "InventoryOperations", LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.InventoryStaffRole);
+    AddStaffRolePolicy(options, "ReportsAccess", LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.AuditorRole);
+    AddStaffRolePolicy(options, "AuditorReadOnly", LocalAccountService.AdministratorRole, LocalAccountService.AuditorRole);
+    AddStaffRolePolicy(options, "IntegrationCounter", LocalAccountService.CounterStaffRole);
 });
 builder.Services.AddAntiforgery(options =>
 {
@@ -61,7 +65,61 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
-builder.Services.AddRateLimiter(options => options.AddFixedWindowLimiter("login", limiter => { limiter.PermitLimit = 5; limiter.Window = TimeSpan.FromMinutes(1); limiter.QueueLimit = 0; }));
+
+var loginLimit = Math.Clamp(builder.Configuration.GetValue<int?>("ApexPost:Security:LoginPermitLimit") ?? 5, 1, 100);
+var partnerLimit = Math.Clamp(builder.Configuration.GetValue<int?>("ApexPost:Security:PartnerPermitLimit") ?? 60, 1, 10_000);
+var loginWindow = TimeSpan.FromSeconds(Math.Clamp(builder.Configuration.GetValue<int?>("ApexPost:Security:LoginWindowSeconds") ?? 60, 1, 3600));
+var partnerWindow = TimeSpan.FromSeconds(Math.Clamp(builder.Configuration.GetValue<int?>("ApexPost:Security:PartnerWindowSeconds") ?? 60, 1, 3600));
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        $"login:{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"}", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = loginLimit, Window = loginWindow, QueueLimit = 0, AutoReplenishment = true }));
+    options.AddPolicy("partner", context => RateLimitPartition.GetFixedWindowLimiter(
+        $"partner:{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"}", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = partnerLimit, Window = partnerWindow, QueueLimit = 0, AutoReplenishment = true }));
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        await Results.Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "Too many requests.")
+            .ExecuteAsync(context.HttpContext);
+    };
+});
+builder.Services.AddProblemDetails();
+builder.Services.AddHsts(options =>
+{
+    var maxAgeDays = Math.Clamp(builder.Configuration.GetValue<int?>("ApexPost:Security:HstsMaxAgeDays") ?? 180, 1, 730);
+    options.MaxAge = TimeSpan.FromDays(maxAgeDays);
+    options.IncludeSubDomains = true;
+});
+var trustedProxyAddresses = (builder.Configuration.GetSection("ApexPost:Security:TrustedProxies").Get<string[]>() ?? [])
+    .Select(proxy => IPAddress.TryParse(proxy, out var address)
+        ? address
+        : throw new InvalidOperationException("Trusted proxy configuration contains an invalid address."))
+    .ToArray();
+builder.Services.PostConfigure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = trustedProxyAddresses.Length == 0
+        ? ForwardedHeaders.None
+        : ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownProxies.Clear();
+    options.KnownIPNetworks.Clear();
+    foreach (var address in trustedProxyAddresses) options.KnownProxies.Add(address);
+});
+var approvedOrigins = builder.Configuration.GetSection("ApexPost:Security:ApprovedCorsOrigins").Get<string[]>() ?? [];
+foreach (var origin in approvedOrigins)
+{
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var parsed) || parsed is null || parsed.AbsolutePath != "/" || !string.IsNullOrEmpty(parsed.Query) || !string.IsNullOrEmpty(parsed.Fragment) || parsed.Scheme is not ("http" or "https"))
+        throw new InvalidOperationException("CORS origin configuration contains an invalid origin.");
+}
+builder.Services.AddCors(options => options.AddPolicy("ApprovedOrigins", policy =>
+{
+    if (approvedOrigins.Length > 0) policy.WithOrigins(approvedOrigins);
+    else policy.SetIsOriginAllowed(static _ => false);
+    policy.AllowAnyHeader().AllowAnyMethod();
+}));
 
 var dataOptions = new JsonDataOptions();
 builder.Configuration.GetSection(JsonDataOptions.SectionName).Bind(dataOptions);
@@ -70,46 +128,22 @@ builder.Configuration.GetSection("ApexPost:JsonSeed").Bind(seedOptions);
 builder.Services.AddSingleton(dataOptions);
 builder.Services.AddSingleton(seedOptions);
 builder.Services.AddSingleton<JsonSeedInitializer>();
-builder.Services.AddSingleton<JsonAuditWriter>(serviceProvider => new JsonAuditWriter(serviceProvider.GetRequiredService<JsonDataOptions>().DataDirectory));
 builder.Services.AddHostedService<JsonInitializationHostedService>();
-builder.Services.AddSingleton<LocalAccountService>();
-builder.Services.AddSingleton<IBranchRepository, JsonBranchRepository>();
-builder.Services.AddSingleton<IStaffRepository, JsonStaffRepository>();
-builder.Services.AddSingleton<IServiceDefinitionRepository, JsonServiceDefinitionRepository>();
-builder.Services.AddTransient<BranchManagementUseCase>();
-builder.Services.AddTransient<StaffManagementUseCase>();
-builder.Services.AddTransient<CatalogueManagementUseCase>();
-builder.Services.AddSingleton<IInventoryItemRepository, JsonInventoryItemRepository>();
-builder.Services.AddSingleton<IMoneyOrderRepository, JsonMoneyOrderRepository>();
-builder.Services.AddSingleton<IRetailTransactionRepository, JsonRetailTransactionRepository>();
-builder.Services.AddSingleton<IShipmentRepository, JsonShipmentRepository>();
-builder.Services.AddSingleton<IServicePriceLookup, JsonServicePriceLookup>();
-builder.Services.AddTransient<InventoryOperationsUseCase>();
-builder.Services.AddTransient<ShipmentOperationsUseCase>();
-builder.Services.AddTransient<MoneyOrderOperationsUseCase>();
-builder.Services.AddTransient<OperationalReportService>();
+builder.Services.AddApexPostApplicationServices(builder.Configuration);
 
 var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
-}
-else
-{
-    app.UseExceptionHandler("/Home/Error");
-}
-
+app.UseForwardedHeaders();
+app.UseExceptionHandler();
+if (!app.Environment.IsDevelopment()) app.UseHsts();
+app.UseMiddleware<MaintenanceModeMiddleware>();
 app.UseHttpsRedirection();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseRouting();
+app.UseCors("ApprovedOrigins");
 app.UseCookiePolicy();
-
 app.UseRateLimiter();
+app.UseMiddleware<IntegrationIpAllowlistMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -117,13 +151,11 @@ app.MapStaticAssets();
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/health/ready");
 app.MapHealthChecks("/health/live");
-
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}")
-    .WithStaticAssets();
-
-
+app.MapControllers();
+app.MapControllerRoute(name: "default", pattern: "{controller=Home}/{action=Index}/{id?}").WithStaticAssets();
 app.Run();
+
+static void AddStaffRolePolicy(AuthorizationOptions options, string name, params string[] roles) =>
+    options.AddPolicy(name, policy => policy.RequireAuthenticatedUser().RequireRole(roles).AddRequirements(new ValidatedStaffRequirement()));
 
 public partial class Program;

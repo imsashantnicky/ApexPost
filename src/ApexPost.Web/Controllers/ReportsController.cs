@@ -1,6 +1,7 @@
 using ApexPost.Application.Reporting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ApexPost.Web.Extensions;
 
 namespace ApexPost.Web.Controllers;
 
@@ -11,6 +12,6 @@ public sealed class ReportsController(OperationalReportService reportService) : 
     public async Task<IActionResult> Index(CancellationToken token)
     {
         var report = await reportService.BuildAsync(token);
-        return View(report);
+        return report.IsSuccess ? View(report.Value) : ApplicationResultHttp.Failure(this, report.Errors);
     }
 }

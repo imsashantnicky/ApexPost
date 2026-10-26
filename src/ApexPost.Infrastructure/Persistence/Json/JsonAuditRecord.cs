@@ -1,3 +1,3 @@
 namespace ApexPost.Infrastructure.Persistence.Json;
 
-public sealed record JsonAuditRecord(string Id, DateTimeOffset OccurredAt, string Action, string EntityType, string EntityId, string? ActorId, IReadOnlyDictionary<string, string> Metadata);
+public sealed record JsonAuditRecord(string Id, DateTimeOffset OccurredAt, string Action, string EntityType, string EntityId, string? ActorId, IReadOnlyDictionary<string, string> Metadata, string? ActorRole = null, Guid? BranchId = null, string Outcome = "Succeeded", string CorrelationId = "unknown");

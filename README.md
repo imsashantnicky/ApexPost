@@ -368,6 +368,7 @@ This is an example of the expected configuration shape. Keep the actual option n
 | `ApexPost:DevelopmentAccounts:Enabled` | Enables configured development accounts when supported |
 | `ApexPost:DevelopmentAccounts:{Role}:UserName` | Development username for a role |
 | `ApexPost:DevelopmentAccounts:{Role}:Password` | Development password for a role |
+| `ApexPost:DevelopmentAccounts:{Role}:StaffId` | Active staff record linked to the development account; its current branch is resolved from JSON staff data |
 
 ### PowerShell environment variables
 

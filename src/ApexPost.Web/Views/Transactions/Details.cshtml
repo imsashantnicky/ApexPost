@@ -1,0 +1,43 @@
+@model ApexPost.Web.Models.TransactionDetailsViewModel
+@{ ViewData["Title"] = "Transaction details"; var tx = Model.Transaction; }
+<div class="page-heading"><div><p class="eyebrow">Counter transaction</p><h1>@tx.CounterReference</h1><p class="text-secondary">Branch @tx.BranchId · <span class="badge text-bg-secondary">@tx.Status</span></p></div><a class="btn btn-outline-secondary" asp-action="Index">All transactions</a></div>
+@if (TempData["Status"] is string status) { <div class="alert alert-success" role="status">@status</div> }
+@if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
+<div class="row g-4">
+    <div class="col-lg-8"><div class="card"><div class="card-header bg-white"><h2 class="h5 mb-0">Basket</h2></div>
+        @if (tx.Lines.Count == 0) { <div class="card-body empty-state"><p class="mb-0">No items in this basket. Add a service to continue.</p></div> }
+        else { <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Description</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>@foreach (var line in tx.Lines) { <tr><td>@line.Description</td><td>@line.Quantity</td><td>@line.UnitPrice.ToString("N2") @tx.CurrencyCode</td><td>@line.Total.ToString("N2") @tx.CurrencyCode</td></tr> }</tbody><tfoot><tr><th colspan="3" class="text-end">Total</th><th>@tx.Total.ToString("N2") @tx.CurrencyCode</th></tr></tfoot></table></div> }
+    </div>
+    <div class="alert alert-info mt-3">This basket supports catalogue services. Product lines and tax calculation are not represented in the current application model.</div>
+    @if (tx.Status == ApexPost.Domain.Transactions.TransactionStatus.Open)
+    {
+        <div class="card mt-3"><div class="card-body"><h2 class="h5">Add a service</h2>
+            @if (Model.Services.Count == 0) { <p class="text-secondary mb-0">No available catalogue services. Ask an administrator to configure the service catalogue.</p> }
+            else { <form asp-action="AddLine" method="post"><input type="hidden" name="TransactionId" value="@tx.Id"/><input type="hidden" name="ExpectedVersion" value="@tx.Version"/><div class="row g-3 align-items-end"><div class="col-md-5"><label class="form-label" for="serviceId">Service</label><select class="form-select" id="serviceId" name="ServiceId" required>@foreach (var service in Model.Services) { <option value="@service.Id">@service.Name (@service.Code)</option> }</select></div><div class="col-md-4"><label class="form-label" for="description">Line description</label><input class="form-control" id="description" name="Description" maxlength="120" required /></div><div class="col-md-2"><label class="form-label" for="quantity">Qty</label><input class="form-control" id="quantity" name="Quantity" type="number" min="1" max="1000" value="1" required /></div><div class="col-md-1"><button class="btn btn-primary" type="submit">Add</button></div></div></form> }
+        </div></div>
+    }
+    @if (tx.Status == ApexPost.Domain.Transactions.TransactionStatus.Paid && Model.Receipt is not null)
+    {
+        <div class="card mt-3"><div class="card-body"><h2 class="h5">Receipt</h2><p class="mb-1">Receipt reference: @Model.Receipt.ReceiptNumber</p><p class="mb-0">Payment: @Model.Receipt.Payment.Method · @Model.Receipt.Payment.Status · @Model.Receipt.Total.ToString("N2") @Model.Receipt.CurrencyCode</p></div></div>
+    }
+    </div>
+    <div class="col-lg-4"><div class="card mb-3"><div class="card-body"><h2 class="h5">Payment</h2>
+        @if (tx.Status == ApexPost.Domain.Transactions.TransactionStatus.Open && tx.Lines.Count > 0)
+        {
+            <form asp-action="StartPayment" method="post"><input type="hidden" name="TransactionId" value="@tx.Id"/><input type="hidden" name="ExpectedVersion" value="@tx.Version"/><input type="hidden" name="Amount" value="@tx.Total"/><input type="hidden" name="IdempotencyKey" value="@Model.PaymentIdempotencyKey"/><div class="mb-3"><label class="form-label" for="paymentMethod">Method</label><select class="form-select" id="paymentMethod" name="Method">@foreach (var method in Enum.GetValues<ApexPost.Domain.Payments.PaymentMethod>()) { <option value="@method">@method</option> }</select></div><div class="mb-3"><label class="form-label" for="paymentReference">Payment reference</label><input class="form-control" id="paymentReference" name="Reference" maxlength="80" required/><div class="form-text">Do not enter card numbers, security codes, passwords, or API keys.</div></div><button class="btn btn-primary w-100">Start payment for @tx.Total.ToString("N2") @tx.CurrencyCode</button></form>
+        }
+        else if (tx.Status == ApexPost.Domain.Transactions.TransactionStatus.PaymentPending)
+        {
+            <p>Payment is pending confirmation at the counter.</p><form asp-action="ConfirmPayment" method="post" class="d-inline"><input type="hidden" name="id" value="@tx.Id"/><input type="hidden" name="version" value="@tx.Version"/><button class="btn btn-success">Confirm paid</button></form> <form asp-action="DeclinePayment" method="post" class="d-inline"><input type="hidden" name="id" value="@tx.Id"/><input type="hidden" name="version" value="@tx.Version"/><button class="btn btn-outline-danger">Decline</button></form>
+        }
+        else { <p class="mb-0 text-secondary">No payment action is available for this transaction status.</p> }
+    </div></div>
+    @if (Model.CanManage && tx.Status is ApexPost.Domain.Transactions.TransactionStatus.Open or ApexPost.Domain.Transactions.TransactionStatus.PaymentPending or ApexPost.Domain.Transactions.TransactionStatus.Paid)
+    {
+        <div class="card border-warning"><div class="card-body"><h2 class="h5">Manager actions</h2>
+            @if (tx.Status is ApexPost.Domain.Transactions.TransactionStatus.Open or ApexPost.Domain.Transactions.TransactionStatus.PaymentPending) { <form asp-action="Void" method="post" class="mb-3"><input type="hidden" name="TransactionId" value="@tx.Id"/><input type="hidden" name="ExpectedVersion" value="@tx.Version"/><label class="form-label" for="voidReason">Void reason</label><input class="form-control mb-2" id="voidReason" name="Reason" minlength="3" maxlength="240" required/><button class="btn btn-outline-danger">Void transaction</button></form> }
+            @if (tx.Status == ApexPost.Domain.Transactions.TransactionStatus.Paid) { <form asp-action="Refund" method="post"><input type="hidden" name="TransactionId" value="@tx.Id"/><input type="hidden" name="ExpectedVersion" value="@tx.Version"/><label class="form-label" for="refundReason">Refund reason</label><input class="form-control mb-2" id="refundReason" name="Reason" minlength="3" maxlength="240" required/><button class="btn btn-outline-danger">Refund payment</button></form> }
+        </div></div>
+    }
+    </div>
+</div>

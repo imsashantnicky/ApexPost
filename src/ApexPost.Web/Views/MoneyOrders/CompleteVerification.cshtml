@@ -1,0 +1,15 @@
+@model ApexPost.Web.Models.IdentityVerificationCompleteForm
+@{ ViewData["Title"] = "Complete identity verification"; }
+<div class="page-heading"><div><p class="eyebrow">Money orders</p><h1>Complete verification</h1><p class="text-secondary">Record the result only after completing the selected review process.</p></div></div>
+<div class="card form-card"><div class="card-body">
+    <dl class="row"><dt class="col-sm-4">Verification reference</dt><dd class="col-sm-8">@Model.VerificationId</dd><dt class="col-sm-4">Method</dt><dd class="col-sm-8">@Model.Method</dd><dt class="col-sm-4">Current status</dt><dd class="col-sm-8"><span class="badge text-bg-secondary">@Model.Status</span></dd></dl>
+    @if (Model.Status == "Pending")
+    {
+        <form asp-action="CompleteVerification" method="post"><input asp-for="VerificationId" type="hidden"/><input asp-for="ExpectedVersion" type="hidden"/><input asp-for="Method" type="hidden"/>
+            <div class="mb-3"><label asp-for="Verified" class="form-label">Review result</label><select asp-for="Verified" class="form-select"><option value="true">Verified</option><option value="false">Could not verify</option></select></div>
+            <div class="mb-3"><label asp-for="RejectionReason" class="form-label">Safe rejection reason (optional)</label><input asp-for="RejectionReason" class="form-control" maxlength="240"/><span asp-validation-for="RejectionReason" class="text-danger"></span><div class="form-text">Do not include identity-document numbers or other sensitive details.</div></div>
+            <button class="btn btn-primary">Record result</button>
+        </form>
+    }
+    else { <p class="mb-0">This verification is already complete. Continue to the money-order page to use an eligible verified result.</p><a class="btn btn-outline-primary mt-3" asp-action="Create">Money orders</a> }
+</div></div>

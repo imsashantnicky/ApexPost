@@ -1,25 +1,40 @@
 @model ApexPost.Web.Models.DashboardViewModel
-@{
-    ViewData["Title"] = "Dashboard";
-}
+@{ ViewData["Title"] = "Dashboard"; }
+<section class="dashboard-intro" aria-labelledby="dashboard-title"><p class="eyebrow">ApexPost counter operations</p><h1 id="dashboard-title">Welcome, @Model.DisplayName</h1><p class="text-secondary">@Model.Role · @Model.BranchName</p></section>
 
-<section class="dashboard-intro" aria-labelledby="dashboard-title">
-    <p class="eyebrow">Retail counter platform</p>
-    <h1 id="dashboard-title">Operations dashboard</h1>
-    <p>Use the navigation to manage counter operations as modules become available.</p>
+<section class="row g-3 mb-4" aria-label="Operational totals">
+    @if (Model.TransactionCount is int txCount)
+    {
+        <div class="col-sm-6 col-xl-3"><article class="status-card"><h2>Counter transactions</h2><p class="metric-value">@txCount</p><p class="mb-0 text-secondary">@Model.OpenTransactionCount open or awaiting payment</p></article></div>
+    }
+    @if (Model.ShipmentCount is int shipmentCount)
+    {
+        <div class="col-sm-6 col-xl-3"><article class="status-card"><h2>Shipments</h2><p class="metric-value">@shipmentCount</p><p class="mb-0 text-secondary">@Model.PendingShipmentCount pending or in transit</p></article></div>
+    }
+    @if (Model.InventoryItemCount is int inventoryCount)
+    {
+        <div class="col-sm-6 col-xl-3"><article class="status-card"><h2>Inventory items</h2><p class="metric-value">@inventoryCount</p><p class="mb-0 text-secondary">@Model.LowStockCount low-stock alerts</p></article></div>
+    }
+    @if (Model.Reports is not null)
+    {
+        <div class="col-sm-6 col-xl-3"><article class="status-card"><h2>Money orders</h2><p class="metric-value">@Model.Reports.BranchActivity.Branches.Sum(branch => branch.MoneyOrderCount)</p><p class="mb-0 text-secondary">In your report scope</p></article></div>
+    }
 </section>
 
-<section class="status-grid" aria-label="Application status">
-    <article class="status-card">
-        <h2>Environment</h2>
-        <p>@Model.EnvironmentName</p>
-    </article>
-    <article class="status-card">
-        <h2>Demonstration data</h2>
-        <p>@(Model.DemonstrationDataEnabled ? "Enabled for an empty development data directory" : "Disabled")</p>
-    </article>
-    <article class="status-card">
-        <h2>Offline queue</h2>
-        <p id="offline-queue-indicator">Checking browser storage…</p>
-    </article>
+<section class="row g-4">
+    <div class="col-lg-7"><div class="card h-100"><div class="card-body"><h2 class="h4">Next actions</h2><div class="d-flex flex-wrap gap-2">
+        @if (User.IsInRole("CounterStaff") || User.IsInRole("BranchManager") || User.IsInRole("Administrator"))
+        {
+            <a class="btn btn-primary" asp-controller="Transactions" asp-action="Create">Create transaction</a>
+            <a class="btn btn-outline-primary" asp-controller="Shipments" asp-action="Book">Book shipment</a>
+            <a class="btn btn-outline-primary" asp-controller="MoneyOrders" asp-action="Create">Issue money order</a>
+        }
+        @if (User.IsInRole("InventoryStaff") || User.IsInRole("BranchManager") || User.IsInRole("Administrator")) { <a class="btn btn-outline-primary" asp-controller="Inventory" asp-action="Index">Review inventory</a> }
+        @if (User.IsInRole("Auditor") || User.IsInRole("BranchManager") || User.IsInRole("Administrator")) { <a class="btn btn-outline-primary" asp-controller="Reports" asp-action="Index">View reports</a> }
+    </div>
+    @if (Model.LowStockCount is int low && low > 0) { <div class="alert alert-warning mt-4 mb-0"><strong>Low stock:</strong> @low inventory items need review. <a asp-controller="Inventory" asp-action="Index">Open inventory</a>.</div> }
+    @if (Model.PendingShipmentCount is int pending && pending > 0) { <div class="alert alert-info mt-3 mb-0"><strong>Shipment tasks:</strong> @pending shipments are booked, accepted, or in transit.</div> }
+    </div></div></div>
+    <div class="col-lg-5"><div class="card h-100"><div class="card-body"><h2 class="h4">Workspace</h2><dl class="row mb-0"><dt class="col-5">Role</dt><dd class="col-7">@Model.Role</dd><dt class="col-5">Branch</dt><dd class="col-7">@Model.BranchName</dd><dt class="col-5">Environment</dt><dd class="col-7">@Model.EnvironmentName</dd></dl><p class="small text-secondary mt-3 mb-0">Business totals above come from persisted application records. Views are limited by your role and branch scope.</p></div></div></div>
 </section>
+<section class="card mt-4"><div class="card-body"><h2 class="h5">Offline drafts</h2><p class="mb-1">Offline storage is limited to browser draft and queue metadata. It does not complete transactions or replace server confirmation.</p><span id="offline-queue-indicator" class="small text-secondary">Checking browser storage…</span></div></section>

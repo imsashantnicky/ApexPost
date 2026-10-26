@@ -12,25 +12,23 @@ This branch adds an initial, reviewable improvement set based on the trainer fee
 - A C# 14 field-backed property in MoneyOrderAmount.
 - Focused tests for the security headers and extension member.
 
-## Important limitations
+## Audit follow-up status
 
-These changes are not a claim that the full lab is complete or that the app has passed its build/tests. The repository still needs a full local build and test run.
+The audit requirements below were implemented in Step 4 and verified by the Release build and test suite. The MVC audit filter records controlled action metadata only. It does not log request bodies, query values, arbitrary route values, headers, or model contents. Audit persistence failures propagate through the global safe exception handler instead of being swallowed.
 
-The MVC audit filter records controlled action metadata only. It deliberately does not log request bodies, query-string values, arbitrary route values, headers, or model contents. Audit persistence is attempted without replacing an action's original result if the audit store itself fails. That fallback should be paired with operational alerting because an audit write failure is still a security/operations incident.
-
-The current JSON audit writer should be reviewed for append-only guarantees, concurrent writes, file permissions, retention, tamper evidence, and crash recovery. JSON files alone do not provide tamper-proof audit storage or atomic multi-file business transactions.
+Sensitive application mutations write a `Started` event before business persistence and a terminal outcome afterward. The JSON writer uses the existing append-only audit interface, strict metadata allowlisting, same-process concurrent-write serialization, and temporary-file replacement. Malformed audit JSON is preserved and causes a visible internal failure. JSON files remain non-tamper-resistant and cannot atomically commit business and audit records across separate files; unresolved `Started` events require reconciliation. See `DESIGN.md`, ADR-006, and `AUDIT-SAMPLE.json`.
 
 The baseline CSP is intentionally restrictive. Verify the actual views and static assets in a browser; if the application uses inline scripts/styles or third-party origins, prefer CSP nonces/hashes and explicit allowlists rather than broadly weakening the policy.
 
 ## Required follow-up before marking the assignment complete
 
 1. Build the solution with the .NET 10 SDK and fix every compiler/analyzer warning.
-2. Run all test projects and add tests for filter registration, audit output, failures, and request cancellation.
+2. Filter registration, audit output/failure handling, concurrent writes, metadata rejection, and cancellation are covered by tests in this step.
 3. Verify security headers in the integration-test host, not only in an isolated middleware test.
 4. Add/verify API-key validation, IP allowlisting, forwarded-header trust boundaries, maintenance-mode behavior, CORS restrictions, login/partner rate limits, and security exception responses.
 5. Verify authentication claims and authorization at branch scope; a role-only policy is not sufficient to isolate branch data.
-6. Ensure every sensitive operation (inventory adjustments, transactions, shipping, money orders, voids, refunds, staff/branch changes) emits a domain audit event with actor, branch, outcome, timestamp, and correlation ID.
-7. Test audit records for secret/PII leakage and confirm the store is append-only.
+6. Sensitive inventory, transaction, shipment, money-order, identity-verification, staff, and branch operations emit application-boundary audit records; authorization denials are recorded at OperationalAccess.
+7. Tests verify safe metadata rejection and append-only behavior through the writer contract. Tamper resistance, retention, and cross-process locking remain unsupported by JSON persistence.
 8. Complete all domain/integration scenarios and verify seed-data counts, reports, ADRs, and AUDIT-SAMPLE.json against the lab rubric.
 9. Review the actual C# 14 feature usage and explain the reason for each feature in the design documentation.
 

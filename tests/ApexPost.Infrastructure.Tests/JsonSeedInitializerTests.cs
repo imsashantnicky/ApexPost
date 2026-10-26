@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ApexPost.Infrastructure.Persistence.Json;
 
 namespace ApexPost.Infrastructure.Tests;
@@ -11,8 +12,17 @@ public class JsonSeedInitializerTests : IDisposable
     {
         await Initializer(enabled: true).InitializeAsync(default);
 
-        Assert.Equal(4, Directory.GetFiles(directory, "*.json").Length);
-        Assert.Contains("BLR-001", await File.ReadAllTextAsync(Path.Combine(directory, "branches.json")));
+        Assert.Equal(10, Directory.GetFiles(directory, "*.json").Length);
+        Assert.Equal(15, await CountAsync("branches.json"));
+        Assert.Equal(20, await CountAsync("staff.json"));
+        Assert.Equal(30, await CountAsync("catalogue.json"));
+        Assert.Equal(30, await CountAsync("pricing.json"));
+        Assert.Equal(30, await CountAsync("inventory.json"));
+        Assert.Equal(20, await CountAsync("shipments.json"));
+        Assert.Equal(30, await CountAsync("shipping-rates.json"));
+        Assert.Equal(40, await CountAsync("transactions.json"));
+        Assert.Equal(16, await CountAsync("money-orders.json"));
+        Assert.Equal(12, await CountAsync("identity-verifications.json"));
         Assert.DoesNotContain("password", await File.ReadAllTextAsync(Path.Combine(directory, "staff.json")), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -21,11 +31,13 @@ public class JsonSeedInitializerTests : IDisposable
     {
         var initializer = Initializer(enabled: true);
         await initializer.InitializeAsync(default);
-        var before = await File.ReadAllTextAsync(Path.Combine(directory, "catalogue.json"));
+        var before = Directory.GetFiles(directory, "*.json").Order(StringComparer.Ordinal)
+            .ToDictionary(Path.GetFileName, File.ReadAllText);
 
         await initializer.InitializeAsync(default);
 
-        Assert.Equal(before, await File.ReadAllTextAsync(Path.Combine(directory, "catalogue.json")));
+        foreach (var (fileName, content) in before)
+            Assert.Equal(content, await File.ReadAllTextAsync(Path.Combine(directory, fileName!)));
     }
 
     [Fact]
@@ -39,15 +51,24 @@ public class JsonSeedInitializerTests : IDisposable
     [Fact]
     public async Task ExistingRecordsArePreserved()
     {
-        Directory.CreateDirectory(directory);
+        var initializer = Initializer(enabled: true);
+        await initializer.InitializeAsync(default);
         var path = Path.Combine(directory, "branches.json");
-        const string existing = "{\"custom\":{\"name\":\"User branch\"}}";
-        await File.WriteAllTextAsync(path, existing);
+        var records = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(await File.ReadAllTextAsync(path))!;
+        var firstRecord = records.First();
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(new Dictionary<string, JsonElement> { [firstRecord.Key] = firstRecord.Value }));
+        var preservedValue = firstRecord.Value.GetRawText();
+        foreach (var file in new[] { "staff.json", "catalogue.json", "pricing.json" })
+            File.Delete(Path.Combine(directory, file));
 
-        await Initializer(enabled: true).InitializeAsync(default);
+        await initializer.InitializeAsync(default);
 
-        Assert.Equal(existing, await File.ReadAllTextAsync(path));
-        Assert.Single(Directory.GetFiles(directory, "*.json"));
+        var restored = JsonDocument.Parse(await File.ReadAllTextAsync(path)).RootElement;
+        Assert.Equal(15, restored.EnumerateObject().Count());
+        Assert.Equal(preservedValue, restored.GetProperty(firstRecord.Key).GetRawText());
+        Assert.Equal(20, await CountAsync("staff.json"));
+        Assert.Equal(30, await CountAsync("catalogue.json"));
+        Assert.Equal(30, await CountAsync("pricing.json"));
     }
 
     [Fact]
@@ -63,6 +84,12 @@ public class JsonSeedInitializerTests : IDisposable
     }
 
     private JsonSeedInitializer Initializer(bool enabled) => new(new JsonDataOptions { DataDirectory = directory }, new JsonSeedOptions { Enabled = enabled });
+
+    private async Task<int> CountAsync(string fileName)
+    {
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, fileName)));
+        return document.RootElement.EnumerateObject().Count();
+    }
 
     public void Dispose()
     {

@@ -1,3 +1,19 @@
 @model IReadOnlyList<ApexPost.Application.Inventory.InventoryItemResponse>
 @{ ViewData["Title"] = "Inventory"; }
-<h1>Inventory</h1><p><a class="btn btn-primary" asp-action="Create">Create inventory item</a></p>@if (TempData["Error"] is string error) { <p class="text-danger" role="alert">@error</p> }@if (!Model.Any()) { <p>No inventory items are available.</p> } else { <table class="table"><thead><tr><th>SKU</th><th>Name</th><th>On hand</th><th>Status</th><th>Operation</th></tr></thead><tbody>@foreach(var item in Model){<tr><td>@item.Sku</td><td>@item.Name</td><td>@item.QuantityOnHand</td><td>@(item.NeedsReorder ? "Reorder needed" : "In stock")</td><td><form asp-action="Receive" method="post"><input type="hidden" name="id" value="@item.Id"/><input type="hidden" name="version" value="@item.Version"/><input name="quantity" type="number" min="1" required/><input name="reason" placeholder="Reason" required/><button class="btn btn-sm btn-primary">Receive</button></form><form asp-action="Issue" method="post"><input type="hidden" name="id" value="@item.Id"/><input type="hidden" name="version" value="@item.Version"/><input name="quantity" type="number" min="1" required/><input name="reason" placeholder="Reason" required/><button class="btn btn-sm btn-outline-danger">Issue</button></form></td></tr>}</tbody></table>}
+<div class="page-heading"><div><p class="eyebrow">Stock control</p><h1>Inventory</h1><p class="text-secondary">Stock and movement actions are scoped to the actor's assigned branch.</p></div><a class="btn btn-primary" asp-action="Create">Create inventory item</a></div>
+@if (Model.Count == 0)
+{
+    <div class="empty-state"><h2 class="h5">No inventory items</h2><p>Create an item to begin tracking branch stock.</p><a class="btn btn-primary" asp-action="Create">Create first item</a></div>
+}
+else
+{
+    <div class="row g-3">
+    @foreach (var item in Model)
+    {
+        <div class="col-12"><div class="card"><div class="card-body"><div class="d-flex flex-wrap justify-content-between gap-3 mb-3"><div><p class="eyebrow mb-1">@item.Sku</p><h2 class="h5 mb-1">@item.Name</h2><span class="text-secondary">Branch @item.BranchId</span></div><div class="text-sm-end"><p class="mb-1"><strong>@item.QuantityOnHand</strong> on hand</p><span class="badge @(item.NeedsReorder ? "text-bg-warning" : "text-bg-success")">@(item.NeedsReorder ? "Reorder needed" : "In stock")</span><span class="small text-secondary ms-2">Reorder at @item.ReorderLevel</span></div></div>
+        <div class="row g-3"><div class="col-lg-6"><form asp-action="Receive" method="post" class="movement-form"><input type="hidden" name="id" value="@item.Id"/><input type="hidden" name="version" value="@item.Version"/><fieldset><legend class="h6">Receive stock</legend><div class="row g-2 align-items-end"><div class="col-sm-3"><label class="form-label" for="receive-qty-@item.Id">Quantity</label><input class="form-control" id="receive-qty-@item.Id" name="quantity" type="number" min="1" required/></div><div class="col-sm-6"><label class="form-label" for="receive-reason-@item.Id">Reason</label><input class="form-control" id="receive-reason-@item.Id" name="reason" maxlength="240" required/></div><div class="col-sm-3"><button class="btn btn-outline-primary w-100">Receive</button></div></div></fieldset></form></div>
+        <div class="col-lg-6"><form asp-action="Issue" method="post" class="movement-form"><input type="hidden" name="id" value="@item.Id"/><input type="hidden" name="version" value="@item.Version"/><fieldset><legend class="h6">Issue stock</legend><div class="row g-2 align-items-end"><div class="col-sm-3"><label class="form-label" for="issue-qty-@item.Id">Quantity</label><input class="form-control" id="issue-qty-@item.Id" name="quantity" type="number" min="1" required/></div><div class="col-sm-6"><label class="form-label" for="issue-reason-@item.Id">Reason</label><input class="form-control" id="issue-reason-@item.Id" name="reason" maxlength="240" required/></div><div class="col-sm-3"><button class="btn btn-outline-danger w-100">Issue</button></div></div></fieldset></form></div></div>
+        </div></div></div>
+    }
+    </div>
+}

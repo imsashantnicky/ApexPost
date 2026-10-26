@@ -1,13 +1,21 @@
 using ApexPost.Application.Results;
 using ApexPost.Domain.Common;
 using ApexPost.Domain.Staff;
+using ApexPost.Application.Security;
 
 namespace ApexPost.Application.Staff;
 
 public sealed class StaffManagementUseCase
 {
     private readonly IStaffRepository repository;
-    public StaffManagementUseCase(IStaffRepository repository) => this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
+    private readonly ICurrentActor currentActor;
+    private readonly IAccessAuditWriter auditWriter;
+    public StaffManagementUseCase(IStaffRepository repository, ICurrentActor currentActor, IAccessAuditWriter auditWriter)
+    {
+        this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        this.currentActor = currentActor ?? throw new ArgumentNullException(nameof(currentActor));
+        this.auditWriter = auditWriter ?? throw new ArgumentNullException(nameof(auditWriter));
+    }
 
     public async Task<ApplicationResult<StaffResponse>> CreateAsync(CreateStaffRequest request, CancellationToken cancellationToken)
     {
@@ -15,7 +23,9 @@ public sealed class StaffManagementUseCase
         try
         {
             var staff = new StaffMember(EntityId.New(), EmployeeNumber.From(request.EmployeeNumber), request.Name, branchId, request.Roles);
-            if (!await repository.TryAddAsync(staff, cancellationToken)) return Duplicate<StaffResponse>("employeeNumber");
+            await AuditAsync("Staff.Create", staff, "Started", cancellationToken);
+            if (!await repository.TryAddAsync(staff, cancellationToken)) { await AuditAsync("Staff.Create", staff, "Failed", cancellationToken); return Duplicate<StaffResponse>("employeeNumber"); }
+            await AuditAsync("Staff.Create", staff, "Succeeded", cancellationToken);
             return ApplicationResults.Success(ToResponse(staff, 1));
         }
         catch (DomainException exception) { return DomainFailure<StaffResponse>(exception); }
@@ -38,14 +48,16 @@ public sealed class StaffManagementUseCase
         if (request is null || !TryId(request.StaffId, out var id) || !TryId(request.BranchId, out var branchId) || request.ExpectedVersion < 1) return Invalid<StaffResponse>();
         var existing = await repository.GetByIdAsync(id, cancellationToken);
         if (existing is null) return NotFound<StaffResponse>();
-        if (existing.Version != request.ExpectedVersion) return Conflict<StaffResponse>();
+        if (existing.Version != request.ExpectedVersion) { await AuditAsync("Staff.Update", existing.Value, "Failed", cancellationToken); return Conflict<StaffResponse>(); }
         try
         {
             existing.Value.Rename(request.Name);
             existing.Value.AssignToBranch(branchId);
             existing.Value.ChangeRoles(request.Roles);
-            return await repository.TryUpdateAsync(existing.Value, request.ExpectedVersion, cancellationToken)
-                ? ApplicationResults.Success(ToResponse(existing.Value, request.ExpectedVersion + 1)) : Conflict<StaffResponse>();
+            await AuditAsync("Staff.Update", existing.Value, "Started", cancellationToken);
+            if (!await repository.TryUpdateAsync(existing.Value, request.ExpectedVersion, cancellationToken)) return Conflict<StaffResponse>();
+            await AuditAsync("Staff.Update", existing.Value, "Succeeded", cancellationToken);
+            return ApplicationResults.Success(ToResponse(existing.Value, request.ExpectedVersion + 1));
         }
         catch (DomainException exception) { return DomainFailure<StaffResponse>(exception); }
     }
@@ -55,17 +67,20 @@ public sealed class StaffManagementUseCase
         if (!TryId(staffId, out var id) || expectedVersion < 1) return Invalid<StaffResponse>();
         var existing = await repository.GetByIdAsync(id, cancellationToken);
         if (existing is null) return NotFound<StaffResponse>();
-        if (existing.Version != expectedVersion) return Conflict<StaffResponse>();
+        if (existing.Version != expectedVersion) { await AuditAsync("Staff.Deactivate", existing.Value, "Failed", cancellationToken); return Conflict<StaffResponse>(); }
         try
         {
             existing.Value.Suspend();
-            return await repository.TryUpdateAsync(existing.Value, expectedVersion, cancellationToken)
-                ? ApplicationResults.Success(ToResponse(existing.Value, expectedVersion + 1)) : Conflict<StaffResponse>();
+            await AuditAsync("Staff.Deactivate", existing.Value, "Started", cancellationToken);
+            if (!await repository.TryUpdateAsync(existing.Value, expectedVersion, cancellationToken)) return Conflict<StaffResponse>();
+            await AuditAsync("Staff.Deactivate", existing.Value, "Succeeded", cancellationToken);
+            return ApplicationResults.Success(ToResponse(existing.Value, expectedVersion + 1));
         }
         catch (DomainException exception) { return DomainFailure<StaffResponse>(exception); }
     }
 
     private static StaffResponse ToResponse(StaffMember staff, long version) => new(staff.Id.Value, version, staff.EmployeeNumber.Value, staff.Name, staff.BranchId.Value, staff.Roles, staff.Status);
+    private Task AuditAsync(string operation, StaffMember staff, string outcome, CancellationToken token) => auditWriter.WriteOperationAsync(currentActor.Actor, staff.BranchId.Value, operation, "Staff", staff.Id.Value.ToString("D"), outcome, new Dictionary<string, string> { ["Status"] = staff.Status.ToString(), ["StaffRoles"] = string.Join(',', staff.Roles.Order()) }, token);
     private static bool TryId(Guid value, out EntityId id) { id = value == Guid.Empty ? null! : EntityId.From(value); return value != Guid.Empty; }
     private static ApplicationResult<T> Invalid<T>() => ApplicationResults.Failure<T>([new("request.invalid", "The request is invalid.")]);
     private static ApplicationResult<T> NotFound<T>() => ApplicationResults.Failure<T>([new("resource.not-found", "The requested resource was not found.")]);
