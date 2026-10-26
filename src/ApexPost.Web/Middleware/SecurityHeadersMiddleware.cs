@@ -9,18 +9,26 @@ public sealed class SecurityHeadersMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
+        AddHeaders(context.Response.Headers);
+
         context.Response.OnStarting(() =>
         {
-            var headers = context.Response.Headers;
-            headers.TryAdd("X-Content-Type-Options", "nosniff");
-            headers.TryAdd("X-Frame-Options", "DENY");
-            headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
-            headers.TryAdd("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-            headers.TryAdd("Content-Security-Policy",
-                "default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
+            AddHeaders(context.Response.Headers);
             return Task.CompletedTask;
         });
 
         await next(context);
+    }
+
+    private static void AddHeaders(IHeaderDictionary headers)
+    {
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+        headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+        headers["Content-Security-Policy"] =
+            "default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
     }
 }
