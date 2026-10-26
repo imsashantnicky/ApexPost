@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Security.Claims;
 using ApexPost.Infrastructure.Persistence.Json;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -32,7 +34,11 @@ public sealed class AuditActionFilter(
         var route = context.RouteData.Values;
         var controller = route.GetValueOrDefault("controller")?.ToString() ?? "Unknown";
         var action = route.GetValueOrDefault("action")?.ToString() ?? "Unknown";
-        var actorId = context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var rawActorId = context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        // User names can be email addresses; persist a stable pseudonymous identifier instead.
+        var actorId = string.IsNullOrWhiteSpace(rawActorId)
+            ? null
+            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawActorId)))[..16];
         var statusCode = executed.HttpContext.Response.StatusCode;
         var outcome = executed.Exception is not null && !executed.ExceptionHandled
             ? "exception"
