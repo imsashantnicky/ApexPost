@@ -89,10 +89,18 @@ public class RetailTransactionTests
         var transaction = CreateTransactionWithLineItem();
         var payment = transaction.StartPayment(125.50m, PaymentMethod.Cash, "RCPT-1");
 
-        transaction.Cancel();
+        transaction.Cancel("Customer withdrew");
 
         Assert.Equal(PaymentStatus.Cancelled, payment.Status);
         Assert.Equal(TransactionStatus.Cancelled, transaction.Status);
+    }
+
+    [Fact]
+    public void VoidRequiresAReason()
+    {
+        var transaction = CreateTransaction();
+        Assert.Throws<DomainException>(() => transaction.Cancel("  "));
+        Assert.Equal(TransactionStatus.Open, transaction.Status);
     }
 
     [Fact]
@@ -102,11 +110,22 @@ public class RetailTransactionTests
         var payment = transaction.StartPayment(125.50m, PaymentMethod.Cash, "RCPT-1");
         transaction.ConfirmPayment();
 
-        transaction.ReversePayment();
+        transaction.ReversePayment("Customer refund");
 
         Assert.Equal(PaymentStatus.Reversed, payment.Status);
         Assert.Equal(TransactionStatus.Reversed, transaction.Status);
-        Assert.Throws<DomainException>(transaction.ReversePayment);
+        Assert.Equal("Customer refund", payment.ReversalReason);
+        Assert.Throws<DomainException>(() => transaction.ReversePayment("Second refund"));
+    }
+
+    [Fact]
+    public void RefundRequiresAReason()
+    {
+        var transaction = CreateTransactionWithLineItem();
+        transaction.StartPayment(125.50m, PaymentMethod.Cash, "RCPT-1");
+        transaction.ConfirmPayment();
+        Assert.Throws<DomainException>(() => transaction.ReversePayment(" "));
+        Assert.Equal(TransactionStatus.Paid, transaction.Status);
     }
 
     [Fact]
@@ -116,7 +135,7 @@ public class RetailTransactionTests
         transaction.StartPayment(125.50m, PaymentMethod.Cash, "RCPT-1");
         transaction.ConfirmPayment();
 
-        Assert.Throws<DomainException>(transaction.Cancel);
+        Assert.Throws<DomainException>(() => transaction.Cancel("Void"));
         Assert.Throws<DomainException>(() => transaction.AddLineItem(EntityId.New(), "Packaging", 1, 20m));
     }
 

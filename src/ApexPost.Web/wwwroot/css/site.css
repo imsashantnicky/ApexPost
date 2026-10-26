@@ -17,3 +17,40 @@ body { min-height: 100vh; margin: 0; color: #172033; background: #f5f7fb; font-f
 .footer { padding: 1.25rem 0; color: #dce8f2; background: #102a43; }
 .footer a { color: #dce8f2; }
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus { box-shadow: 0 0 0 .2rem #bce3ff; }
+.navbar-brand { display: flex; flex-direction: column; line-height: 1.05; }
+.brand-caption { margin-top: .3rem; color: #c6d8e7; font-size: .68rem; font-weight: 500; letter-spacing: .04em; }
+.page-content { max-width: 1440px; }
+.page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
+.page-heading h1 { margin-bottom: .35rem; font-size: clamp(1.8rem, 4vw, 2.5rem); font-weight: 700; }
+.page-heading p { margin-bottom: 0; }
+.status-card { height: 100%; }
+.status-card h2 { color: #526477; }
+.metric-value { margin: .25rem 0; color: #102a43; font-size: 2rem; font-weight: 700; line-height: 1.2; }
+.card { border-color: #dce4ed; border-radius: .75rem; box-shadow: 0 .2rem .65rem rgb(16 42 67 / 5%); }
+.card-header { border-bottom-color: #e5ebf1; border-radius: .75rem .75rem 0 0 !important; }
+.form-card { max-width: 900px; }
+.form-section { margin-bottom: 1.75rem; padding-bottom: 1.5rem; border-bottom: 1px solid #e5ebf1; }
+.form-section:last-of-type { border-bottom: 0; }
+.form-section h2 { margin-bottom: 1rem; }
+.form-label { font-weight: 600; }
+.table thead th { color: #526477; font-size: .82rem; letter-spacing: .025em; white-space: nowrap; }
+.empty-state { padding: clamp(1.5rem, 4vw, 3rem); text-align: center; color: #526477; }
+.empty-state h2 { color: #172033; }
+.movement-form { height: 100%; padding: 1rem; border: 1px solid #e5ebf1; border-radius: .6rem; }
+.movement-form fieldset { min-width: 0; }
+.label-preview { max-width: 900px; border: 2px solid #102a43; box-shadow: 0 .5rem 1.5rem rgb(16 42 67 / 10%); }
+address { line-height: 1.7; }
+.table-responsive { border-radius: .75rem; }
+@media (max-width: 767.98px) {
+    .page-content { padding-top: 1.5rem; padding-bottom: 2rem; }
+    .page-heading { align-items: flex-start; flex-direction: column; }
+    .page-heading .btn { width: 100%; }
+    .status-card { min-height: auto; padding: 1.15rem; }
+    .movement-form { padding: .75rem; }
+}
+@media print {
+    body { color: #000; background: #fff; }
+    .site-header, .footer, .page-heading, .offline-status, form, .btn { display: none !important; }
+    .page-content { max-width: none; padding: 0; }
+    .label-preview { max-width: none; border: 1px solid #000; box-shadow: none; }
+}

@@ -1,4 +1,5 @@
 using ApexPost.Infrastructure.Persistence.Json;
+using ApexPost.Application.Security;
 
 namespace ApexPost.Infrastructure.Tests;
 
@@ -10,12 +11,15 @@ public class JsonAuditAndRecoveryTests : IDisposable
     public async Task AuditWriterStoresOperationalMetadata()
     {
         var writer = new JsonAuditWriter(directory);
-        var record = await writer.WriteAsync("branch.suspended", "Branch", "branch-1", "staff-1", new Dictionary<string, string> { ["reasonCode"] = "maintenance" }, default);
+        var actor = new ActorContext(Guid.Parse("11111111-1111-1111-1111-111111111111"), "Administrator", Guid.Parse("22222222-2222-2222-2222-222222222222"), "audit-test-correlation");
+        await writer.WriteOperationAsync(actor, actor.AssignedBranchId, "Branch.Deactivate", "Branch", "33333333-3333-3333-3333-333333333333", "Succeeded", new Dictionary<string, string> { ["Status"] = "Suspended" }, default);
         var store = new JsonCollectionStore<JsonAuditRecord>(directory, "audit.json");
 
         var persisted = Assert.Single(await store.ReadAllAsync(default)).Value;
-        Assert.Equal(record.Id, persisted.Id);
-        Assert.Equal("maintenance", persisted.Metadata["reasonCode"]);
+        Assert.Equal("Branch.Deactivate", persisted.Action);
+        Assert.Equal("Administrator", persisted.ActorRole);
+        Assert.Equal(actor.CorrelationId, persisted.CorrelationId);
+        Assert.Equal("Suspended", persisted.Metadata["Status"]);
     }
 
     [Fact]
@@ -23,8 +27,63 @@ public class JsonAuditAndRecoveryTests : IDisposable
     {
         var writer = new JsonAuditWriter(directory);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => writer.WriteAsync("payment.started", "Transaction", "tx-1", null, new Dictionary<string, string> { ["cardNumber"] = "never-store" }, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.WriteOperationAsync(null, null, "Transaction.StartPayment", "RetailTransaction", "tx-1", "Succeeded", new Dictionary<string, string> { ["PaymentSecret"] = "never-store" }, default));
         Assert.False(File.Exists(Path.Combine(directory, "audit.json")));
+    }
+
+    [Fact]
+    public async Task OperationAuditContainsTrustedContextAndSafeFieldsOnly()
+    {
+        var writer = new JsonAuditWriter(directory);
+        var actor = new ActorContext(Guid.Parse("11111111-1111-1111-1111-111111111111"), "BranchManager", Guid.Parse("22222222-2222-2222-2222-222222222222"), "corr-synthetic-01");
+        await writer.WriteOperationAsync(actor, actor.AssignedBranchId, "Transaction.Refund", "RetailTransaction", "33333333-3333-3333-3333-333333333333", "Succeeded", new Dictionary<string, string> { ["Status"] = "Reversed", ["Version"] = "3" }, default);
+
+        var stored = Assert.Single(await new JsonCollectionStore<JsonAuditRecord>(directory, "audit.json").ReadAllAsync(default)).Value;
+        Assert.Equal(actor.StaffId.ToString("D"), stored.ActorId);
+        Assert.Equal("BranchManager", stored.ActorRole);
+        Assert.Equal(actor.AssignedBranchId, stored.BranchId);
+        Assert.Equal("Succeeded", stored.Outcome);
+        Assert.Equal(actor.CorrelationId, stored.CorrelationId);
+        Assert.Equal(DateTimeOffset.UtcNow.Offset, stored.OccurredAt.Offset);
+        Assert.Equal("Reversed", stored.Metadata["Status"]);
+    }
+
+    [Fact]
+    public async Task ConcurrentAuditWritesRemainAppendOnlyAndCancellationIsPropagated()
+    {
+        var writer = new JsonAuditWriter(directory);
+        var writes = Enumerable.Range(0, 80).Select(index => writer.WriteOperationAsync(null, null, "Inventory.Adjust", "InventoryItem", index.ToString(System.Globalization.CultureInfo.InvariantCulture), "Succeeded", null, default));
+        await Task.WhenAll(writes);
+
+        var store = new JsonCollectionStore<JsonAuditRecord>(directory, "audit.json");
+        Assert.Equal(80, (await store.ReadAllAsync(default)).Count);
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => writer.WriteOperationAsync(null, null, "Shipment.Book", "Shipment", "sample", "Succeeded", null, canceled.Token));
+        Assert.Equal(80, (await store.ReadAllAsync(default)).Count);
+    }
+
+    [Fact]
+    public async Task OperationAuditRejectsSensitiveOrUnapprovedMetadata()
+    {
+        var writer = new JsonAuditWriter(directory);
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.WriteOperationAsync(null, null, "IdentityVerification.Complete", "IdentityVerification", "sample", "Succeeded", new Dictionary<string, string> { ["DocumentNumber"] = "SYNTHETIC" }, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.WriteOperationAsync(null, null, "MoneyOrder.Issue", "MoneyOrder", "sample", "Succeeded", new Dictionary<string, string> { ["Status"] = "api-key-should-not-be-here" }, default));
+        Assert.False(File.Exists(Path.Combine(directory, "audit.json")));
+    }
+
+    [Fact]
+    public async Task MalformedAuditFileIsPreservedAndAuditFailurePropagates()
+    {
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "audit.json");
+        const string malformed = "{ malformed audit data";
+        await File.WriteAllTextAsync(path, malformed);
+        var writer = new JsonAuditWriter(directory);
+
+        await Assert.ThrowsAsync<JsonPersistenceException>(() => writer.WriteOperationAsync(null, null, "MoneyOrder.Issue", "MoneyOrder", "synthetic-target", "Succeeded", null, default));
+
+        Assert.Equal(malformed, await File.ReadAllTextAsync(path));
     }
 
     [Fact]

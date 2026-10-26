@@ -11,7 +11,7 @@ public sealed class InventoryItem
         Id = id ?? throw new DomainException("Inventory item identity is required.");
         BranchId = branchId ?? throw new DomainException("Branch identity is required.");
         Sku = sku ?? throw new DomainException("Inventory SKU is required.");
-        Name = RequiredName(name);
+        Name = name;
         ReorderLevel = ValidNonNegativeQuantity(reorderLevel, "Reorder level");
     }
 
@@ -21,7 +21,7 @@ public sealed class InventoryItem
 
     public InventorySku Sku { get; }
 
-    public string Name { get; private set; }
+    public string Name { get; private set => field = RequiredName(value); }
 
     public int ReorderLevel { get; private set; }
 
@@ -33,7 +33,7 @@ public sealed class InventoryItem
 
     public void Rename(string name)
     {
-        Name = RequiredName(name);
+        Name = name;
     }
 
     public void SetReorderLevel(int reorderLevel)

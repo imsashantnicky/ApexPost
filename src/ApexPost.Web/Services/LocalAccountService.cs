@@ -2,6 +2,9 @@ using ApexPost.Infrastructure.Persistence.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using ApexPost.Application.Staff;
+using ApexPost.Domain.Common;
+using ApexPost.Domain.Staff;
 using System.Text.RegularExpressions;
 
 namespace ApexPost.Web.Services;
@@ -53,27 +56,6 @@ public sealed class LocalAccountService
 
     public static bool IsReadOnlyRole(string? role) => string.Equals(NormalizeRole(role), AuditorRole, StringComparison.OrdinalIgnoreCase);
 
-    public static bool CanAccessBranch(string? role, string? assignedBranchId, string? requestedBranchId)
-    {
-        var normalizedRole = NormalizeRole(role);
-        if (string.Equals(normalizedRole, AdministratorRole, StringComparison.OrdinalIgnoreCase) || string.Equals(normalizedRole, AuditorRole, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(requestedBranchId))
-        {
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(assignedBranchId))
-        {
-            return false;
-        }
-
-        return string.Equals(assignedBranchId.Trim(), requestedBranchId.Trim(), StringComparison.OrdinalIgnoreCase);
-    }
-
     public static string GetDashboardAction(string? role)
     {
         return NormalizeRole(role) switch
@@ -111,6 +93,20 @@ public sealed class LocalAccountService
         }
     }
 
+    public async Task<bool> BootstrapAsync(string userName, string password, Guid staffId, Guid branchId, CancellationToken token)
+    {
+        await BootstrapLock.WaitAsync(token);
+        try
+        {
+            if (!IsValidUserName(userName) || password is null || password.Length < 12 || staffId == Guid.Empty || branchId == Guid.Empty || await HasAccountsAsync(token)) return false;
+            return await CreateAsync(userName, password, AdministratorRole, staffId, branchId, token);
+        }
+        finally
+        {
+            BootstrapLock.Release();
+        }
+    }
+
     public async Task<bool> CreateAsync(string userName, string password, string role, CancellationToken token) => await CreateAsync(userName, password, role, null, token);
 
     public async Task<bool> CreateAsync(string userName, string password, string role, string? assignedBranchId, CancellationToken token)
@@ -124,6 +120,16 @@ public sealed class LocalAccountService
         return await store.TryAddAsync(normalizedUserName.ToLowerInvariant(), record, token);
     }
 
+    public async Task<bool> CreateAsync(string userName, string password, string role, Guid staffId, Guid branchId, CancellationToken token)
+    {
+        var normalizedUserName = NormalizeUserName(userName);
+        var normalizedRole = NormalizeRole(role);
+        if (!IsValidUserName(normalizedUserName) || password is null || password.Length < 12 || !IsSupportedRole(normalizedRole) || staffId == Guid.Empty || branchId == Guid.Empty) return false;
+        var record = new AccountRecord(normalizedUserName, string.Empty, normalizedRole, branchId.ToString("D"), staffId);
+        record = record with { PasswordHash = hasher.HashPassword(record, password) };
+        return await store.TryAddAsync(normalizedUserName.ToLowerInvariant(), record, token);
+    }
+
     public async Task<AccountRecord?> ValidateAsync(string userName, string password, CancellationToken token)
     {
         var normalized = NormalizeUserName(userName);
@@ -133,7 +139,7 @@ public sealed class LocalAccountService
         return hasher.VerifyHashedPassword(account, account.PasswordHash, password) is not PasswordVerificationResult.Failed ? account : null;
     }
 
-    public async Task InitializeDevelopmentAccountsAsync(IWebHostEnvironment environment, IConfiguration configuration, CancellationToken token)
+    public async Task InitializeDevelopmentAccountsAsync(IWebHostEnvironment environment, IConfiguration configuration, IStaffRepository staffRepository, CancellationToken token)
     {
         if (!configuration.GetValue<bool>("ApexPost:DevelopmentAccounts:Enabled"))
         {
@@ -150,17 +156,17 @@ public sealed class LocalAccountService
         {
             var userName = section[$"{role}:UserName"] ?? section[$"{role}:Username"] ?? Environment.GetEnvironmentVariable($"ApexPost__DevelopmentAccounts__{role}__UserName") ?? Environment.GetEnvironmentVariable($"ApexPost__DevelopmentAccounts__{role}__Username");
             var password = section[$"{role}:Password"] ?? Environment.GetEnvironmentVariable($"ApexPost__DevelopmentAccounts__{role}__Password");
-            var assignedBranchId = section[$"{role}:BranchId"] ?? Environment.GetEnvironmentVariable($"ApexPost__DevelopmentAccounts__{role}__BranchId");
+            var staffIdValue = section[$"{role}:StaffId"] ?? Environment.GetEnvironmentVariable($"ApexPost__DevelopmentAccounts__{role}__StaffId");
 
-            var hasAnySetting = !string.IsNullOrWhiteSpace(userName) || !string.IsNullOrWhiteSpace(password) || !string.IsNullOrWhiteSpace(assignedBranchId);
+            var hasAnySetting = !string.IsNullOrWhiteSpace(userName) || !string.IsNullOrWhiteSpace(password) || !string.IsNullOrWhiteSpace(staffIdValue);
             if (!hasAnySetting)
             {
                 continue;
             }
 
-            if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
+            if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password) || !Guid.TryParse(staffIdValue, out var staffId) || staffId == Guid.Empty)
             {
-                throw new InvalidOperationException($"Development account configuration for role '{role}' is incomplete. Set ApexPost__DevelopmentAccounts__{role}__UserName and ApexPost__DevelopmentAccounts__{role}__Password or the matching user-secrets values.");
+                throw new InvalidOperationException($"Development account configuration for role '{role}' is incomplete. Set its UserName, Password and StaffId values in local secrets or environment configuration.");
             }
 
             if (await HasAccountAsync(userName, token))
@@ -168,7 +174,10 @@ public sealed class LocalAccountService
                 continue;
             }
 
-            var created = await CreateAsync(userName, password, role, assignedBranchId, token);
+            var staff = await staffRepository.GetByIdAsync(EntityId.From(staffId), token);
+            if (staff is null || staff.Value.Status != EmploymentStatus.Active || !RoleMatchesStaff(role, staff.Value.Roles))
+                throw new InvalidOperationException($"Development account configuration for role '{role}' must reference active staff with a compatible assignment.");
+            var created = await CreateAsync(userName, password, role, staff.Value.Id.Value, staff.Value.BranchId.Value, token);
             if (!created)
             {
                 throw new InvalidOperationException($"Development account '{userName}' for role '{role}' could not be created. Check for a duplicate or invalid username.");
@@ -178,6 +187,14 @@ public sealed class LocalAccountService
 
     private static string NormalizeUserName(string? userName) => userName?.Trim() ?? string.Empty;
     private static bool IsValidUserName(string? userName) => userName is not null && UserNamePattern.IsMatch(userName.Trim());
+    private static bool RoleMatchesStaff(string role, IReadOnlyCollection<StaffRole> roles) => NormalizeRole(role) switch
+    {
+        AdministratorRole or AuditorRole => true,
+        BranchManagerRole => roles.Contains(StaffRole.BranchManager),
+        CounterStaffRole => roles.Contains(StaffRole.CounterClerk),
+        InventoryStaffRole => roles.Contains(StaffRole.InventoryClerk),
+        _ => false
+    };
 }
 
-public sealed record AccountRecord(string UserName, string PasswordHash, string Role, string? AssignedBranchId = null);
+public sealed record AccountRecord(string UserName, string PasswordHash, string Role, string? AssignedBranchId = null, Guid? StaffId = null);

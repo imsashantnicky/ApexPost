@@ -66,6 +66,16 @@ public class JsonCollectionStoreTests : IDisposable
         Assert.Equal(20, items.Count);
     }
 
+    [Fact]
+    public async Task CancelledOperationStopsBeforeWaitingForCollectionLock()
+    {
+        var store = new JsonCollectionStore<TestItem>(directory, "cancelled.json");
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.ReadAllAsync(cancellation.Token));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(directory)) Directory.Delete(directory, true);

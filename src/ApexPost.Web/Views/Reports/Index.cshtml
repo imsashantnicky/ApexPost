@@ -1,78 +1,30 @@
 @model ApexPost.Application.Reporting.OperationalSummaryReport
-@{
-    ViewData["Title"] = "Operational reports";
-}
+@{ ViewData["Title"] = "Operational reports"; }
+<div class="page-heading"><div><p class="eyebrow">Operational insight</p><h1>Reports</h1><p class="text-secondary">Generated @Model.GeneratedAtUtc.ToLocalTime().ToString("g") · Branch scope is applied by the Application service.</p></div></div>
 
-<h1>Operational reports</h1>
-
-<div class="card mb-3">
-    <div class="card-body">
-        <h2 class="h5">Generated @Model.GeneratedAtUtc.ToLocalTime().ToString("g")</h2>
-    </div>
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-xl-3"><div class="card h-100"><div class="card-body"><h2 class="h6">Transactions</h2><p class="metric-value">@Model.Transactions.TotalCount</p><p class="mb-0 text-secondary">@Model.Transactions.PaidCount paid or reversed · @Model.Transactions.IssuedCount open or pending</p></div></div></div>
+    <div class="col-md-6 col-xl-3"><div class="card h-100"><div class="card-body"><h2 class="h6">Payments</h2><p class="metric-value">@Model.Payments.TotalCount</p><p class="mb-0 text-secondary">@Model.Payments.PendingCount pending · @Model.Payments.PaidCount confirmed or reversed</p></div></div></div>
+    <div class="col-md-6 col-xl-3"><div class="card h-100"><div class="card-body"><h2 class="h6">Shipments</h2><p class="metric-value">@Model.Shipments.BookedCount</p><p class="mb-0 text-secondary">@Model.Shipments.AcceptedCount accepted · @Model.Shipments.InTransitCount in transit · @Model.Shipments.DeliveredCount delivered</p></div></div></div>
+    <div class="col-md-6 col-xl-3"><div class="card h-100"><div class="card-body"><h2 class="h6">Inventory</h2><p class="metric-value">@Model.Inventory.ItemCount</p><p class="mb-0 text-secondary">@Model.Inventory.UnitsOnHand units · @Model.Inventory.LowStockCount low stock</p></div></div></div>
 </div>
 
-<div class="row g-3">
-    <div class="col-md-6 col-xl-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <h3 class="h6">Transactions</h3>
-                <p class="mb-1"><strong>@Model.Transactions.TotalCount</strong> total</p>
-                <p class="mb-1">Paid: @Model.Transactions.PaidCount</p>
-                <p class="mb-0">Value: @Model.Transactions.TotalValue.ToString("C")</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <h3 class="h6">Payments</h3>
-                <p class="mb-1"><strong>@Model.Payments.TotalCount</strong> total</p>
-                <p class="mb-1">Pending: @Model.Payments.PendingCount</p>
-                <p class="mb-0">Collected: @Model.Payments.TotalCollected.ToString("C")</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <h3 class="h6">Shipments</h3>
-                <p class="mb-1">Booked: @Model.Shipments.BookedCount</p>
-                <p class="mb-1">In transit: @Model.Shipments.InTransitCount</p>
-                <p class="mb-0">Delivered: @Model.Shipments.DeliveredCount</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <h3 class="h6">Inventory</h3>
-                <p class="mb-1">Items: @Model.Inventory.ItemCount</p>
-                <p class="mb-1">Units on hand: @Model.Inventory.UnitsOnHand</p>
-                <p class="mb-0">Reorder alerts: @Model.Inventory.ReorderAlerts</p>
-            </div>
-        </div>
-    </div>
-</div>
+<section class="card mb-4"><div class="card-header bg-white"><h2 class="h5 mb-0">Daily branch sales by retail products and services</h2></div>
+    @if (Model.DailySales.Entries.Count == 0) { <div class="card-body empty-state">No paid, dated transactions are available in this report scope.</div> }
+    else { <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Date (UTC)</th><th>Branch</th><th>Paid transactions</th><th>Retail sales</th><th>Service sales</th></tr></thead><tbody>@foreach (var sale in Model.DailySales.Entries) { <tr><td>@sale.BusinessDate.ToString("yyyy-MM-dd")</td><td>@sale.BranchName (@sale.BranchCode)</td><td>@sale.TransactionCount</td><td>@sale.RetailSales.ToString("N2") INR</td><td>@sale.ServiceSales.ToString("N2") INR</td></tr> }</tbody></table></div> }
+</section>
 
-<h2 class="h4 mt-4">Branch activity</h2>
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Branch</th>
-            <th>Inventory Items</th>
-            <th>Reorder Alerts</th>
-            <th>Money Orders</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var branch in Model.BranchActivity.Branches)
-        {
-            <tr>
-                <td>@branch.BranchName (@branch.BranchCode)</td>
-                <td>@branch.InventoryItems</td>
-                <td>@branch.ReorderAlerts</td>
-                <td>@branch.MoneyOrderCount</td>
-            </tr>
-        }
-    </tbody>
-</table>
+<section class="card mb-4"><div class="card-header bg-white"><h2 class="h5 mb-0">Shipment volume by zone and service level</h2></div>
+    @if (Model.ShipmentVolumeByZoneAndServiceLevel.Count == 0) { <div class="card-body empty-state">No shipments with configured zone and service-level data are available.</div> }
+    else { <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Zone</th><th>Service level</th><th>Shipments</th></tr></thead><tbody>@foreach (var volume in Model.ShipmentVolumeByZoneAndServiceLevel) { <tr><td>@volume.ZoneCode</td><td>@volume.ServiceLevel</td><td>@volume.ShipmentCount</td></tr> }</tbody></table></div> }
+</section>
+
+<section class="card mb-4"><div class="card-header bg-white"><h2 class="h5 mb-0">Low stock by branch</h2></div>
+    @if (Model.BranchActivity.Branches.Count == 0) { <div class="card-body empty-state">No branch data is available in this report scope.</div> }
+    else { <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Branch</th><th>Inventory items</th><th>Low stock</th><th>Reorder alerts</th></tr></thead><tbody>@foreach (var branch in Model.BranchActivity.Branches) { <tr><td class="fw-semibold">@branch.BranchName <span class="text-secondary">(@branch.BranchCode)</span></td><td>@branch.InventoryItems</td><td>@branch.LowStockCount</td><td>@branch.ReorderAlerts</td></tr> }</tbody></table></div> }
+</section>
+
+<section class="card"><div class="card-header bg-white"><h2 class="h5 mb-0">Money orders and identity-verification outcomes by branch</h2></div>
+    @if (Model.BranchActivity.Branches.Count == 0) { <div class="card-body empty-state">No branch data is available in this report scope.</div> }
+    else { <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Branch</th><th>Money orders</th><th>Verification pending</th><th>Verified</th><th>Rejected</th></tr></thead><tbody>@foreach (var branch in Model.BranchActivity.Branches) { <tr><td class="fw-semibold">@branch.BranchName <span class="text-secondary">(@branch.BranchCode)</span></td><td>@branch.MoneyOrderCount</td><td>@branch.PendingIdentityVerifications</td><td>@branch.VerifiedIdentityVerifications</td><td>@branch.RejectedIdentityVerifications</td></tr> }</tbody></table></div> }
+</section>

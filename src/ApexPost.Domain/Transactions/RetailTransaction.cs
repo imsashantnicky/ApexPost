@@ -8,12 +8,13 @@ public sealed class RetailTransaction
     private readonly List<TransactionLineItem> lineItems = [];
     private readonly List<PaymentRecord> payments = [];
 
-    public RetailTransaction(EntityId id, EntityId branchId, string counterReference, string currencyCode)
+    public RetailTransaction(EntityId id, EntityId branchId, string counterReference, string currencyCode, DateTimeOffset? createdAtUtc = null)
     {
         Id = id ?? throw new DomainException("Transaction identity is required.");
         BranchId = branchId ?? throw new DomainException("Branch identity is required.");
         CounterReference = RequiredCounterReference(counterReference);
         CurrencyCode = ApexPost.Domain.Common.CurrencyCode.From(currencyCode).Value;
+        CreatedAtUtc = createdAtUtc?.ToUniversalTime();
         Status = TransactionStatus.Open;
     }
 
@@ -25,7 +26,11 @@ public sealed class RetailTransaction
 
     public string CurrencyCode { get; }
 
+    public DateTimeOffset? CreatedAtUtc { get; }
+
     public TransactionStatus Status { get; private set; }
+
+    public string? VoidReason { get; private set; }
 
     public IReadOnlyList<TransactionLineItem> LineItems => lineItems.AsReadOnly();
 
@@ -33,7 +38,7 @@ public sealed class RetailTransaction
 
     public decimal Total => lineItems.Sum(lineItem => lineItem.Total);
 
-    public TransactionLineItem AddLineItem(EntityId serviceId, string description, int quantity, decimal unitPrice)
+    public TransactionLineItem AddLineItem(EntityId serviceId, string description, int quantity, decimal unitPrice, TransactionLineKind kind = TransactionLineKind.Service)
     {
         EnsureOpen();
         var lineItem = new TransactionLineItem(
@@ -41,7 +46,8 @@ public sealed class RetailTransaction
             serviceId ?? throw new DomainException("Service identity is required."),
             description,
             quantity,
-            unitPrice);
+            unitPrice,
+            kind);
         lineItems.Add(lineItem);
         return lineItem;
     }
@@ -93,8 +99,9 @@ public sealed class RetailTransaction
         Status = TransactionStatus.Open;
     }
 
-    public void Cancel()
+    public void Cancel(string reason)
     {
+        var normalizedReason = RequiredReason(reason, "Void reason");
         if (Status == TransactionStatus.PaymentPending)
         {
             PendingPayment().Cancel();
@@ -105,9 +112,10 @@ public sealed class RetailTransaction
         }
 
         Status = TransactionStatus.Cancelled;
+        VoidReason = normalizedReason;
     }
 
-    public void ReversePayment()
+    public void ReversePayment(string reason)
     {
         if (Status != TransactionStatus.Paid)
         {
@@ -115,7 +123,7 @@ public sealed class RetailTransaction
         }
 
         var payment = payments.Single(paymentRecord => paymentRecord.Status == PaymentStatus.Confirmed);
-        payment.Reverse();
+        payment.Reverse(reason);
         Status = TransactionStatus.Reversed;
     }
 
@@ -147,6 +155,13 @@ public sealed class RetailTransaction
         }
 
         return normalizedReference;
+    }
+
+    private static string RequiredReason(string reason, string field)
+    {
+        var normalized = reason?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 250) throw new DomainException($"{field} is required and must not exceed 250 characters.");
+        return normalized;
     }
 
 }

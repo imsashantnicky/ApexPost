@@ -21,6 +21,17 @@ public class InventoryItemTests
         Assert.Throws<DomainException>(() => CreateItem(reorderLevel: -1));
     }
 
+    [Fact]
+    public void RenameNormalizesNameAndRejectsInvalidValuesWithoutChangingCurrentName()
+    {
+        var item = CreateItem();
+        item.Rename("  Mailing box  ");
+
+        Assert.Equal("Mailing box", item.Name);
+        Assert.Throws<DomainException>(() => item.Rename("   "));
+        Assert.Equal("Mailing box", item.Name);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]

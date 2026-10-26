@@ -8,7 +8,7 @@ namespace ApexPost.Web.Tests;
 public sealed class SecurityAndCSharp14Tests
 {
     [Fact]
-    public async Task SecurityHeadersMiddleware_AddsBaselineHeaders()
+    public async Task SecurityHeadersMiddlewareAddsBaselineHeaders()
     {
         var context = new DefaultHttpContext();
         var middleware = new SecurityHeadersMiddleware(_ => Task.CompletedTask);
@@ -26,13 +26,13 @@ public sealed class SecurityAndCSharp14Tests
     [InlineData("ApexPost", true)]
     [InlineData("", false)]
     [InlineData("   ", false)]
-    public void CSharp14ExtensionMember_IsNotBlank_ReturnsExpectedResult(string value, bool expected)
+    public void CSharp14ExtensionMemberIsNotBlankReturnsExpectedResult(string value, bool expected)
     {
         Assert.Equal(expected, value.IsNotBlank);
     }
 
     [Fact]
-    public void CSharp14ExtensionMember_IsNotBlank_HandlesNull()
+    public void CSharp14ExtensionMemberIsNotBlankHandlesNull()
     {
         string? value = null;
 

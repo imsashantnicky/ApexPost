@@ -1,3 +1,14 @@
 @model ApexPost.Web.Models.InventoryForm
 @{ ViewData["Title"] = "Create inventory item"; }
-<h1>Create inventory item</h1><form method="post">@Html.AntiForgeryToken()<div asp-validation-summary="ModelOnly" class="text-danger" role="alert"></div><label asp-for="BranchId"></label><input asp-for="BranchId" class="form-control"/><label asp-for="Sku"></label><input asp-for="Sku" class="form-control"/><label asp-for="Name"></label><input asp-for="Name" class="form-control"/><label asp-for="ReorderLevel"></label><input asp-for="ReorderLevel" class="form-control"/><button class="btn btn-primary mt-3">Save</button></form>
+<div class="page-heading"><div><p class="eyebrow">Stock control</p><h1>Create inventory item</h1><p class="text-secondary">Stock starts at zero. Receive an audited stock movement to record the opening balance.</p></div></div>
+<div class="card form-card"><div class="card-body"><form asp-action="Create" method="post"><div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+    <div class="row g-3">
+        <div class="col-md-6"><label asp-for="BranchId" class="form-label">Branch</label>
+            @if (User.IsInRole("Administrator")) { <select asp-for="BranchId" class="form-select"><option value="">Choose active branch</option>@foreach (var branch in Model.Branches) { <option value="@branch.Id">@branch.Name</option> }</select> }
+            else { <input asp-for="BranchId" type="hidden"/><input class="form-control" value="@(Model.Branches.FirstOrDefault()?.Name ?? "Unavailable")" readonly/> }
+            <span asp-validation-for="BranchId" class="text-danger"></span></div>
+        <div class="col-md-6"><label asp-for="Sku" class="form-label">SKU</label><input asp-for="Sku" class="form-control"/><span asp-validation-for="Sku" class="text-danger"></span></div>
+        <div class="col-md-8"><label asp-for="Name" class="form-label">Item name</label><input asp-for="Name" class="form-control"/><span asp-validation-for="Name" class="text-danger"></span></div>
+        <div class="col-md-4"><label asp-for="ReorderLevel" class="form-label">Reorder level</label><input asp-for="ReorderLevel" class="form-control" type="number" min="0"/><span asp-validation-for="ReorderLevel" class="text-danger"></span></div>
+    </div><div class="mt-4 d-flex gap-2"><button class="btn btn-primary">Create item</button><a class="btn btn-outline-secondary" asp-action="Index">Cancel</a></div>
+</form></div></div>

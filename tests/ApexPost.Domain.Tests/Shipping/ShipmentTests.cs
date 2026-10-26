@@ -40,6 +40,8 @@ public class ShipmentTests
     {
         Assert.Throws<DomainException>(() => new ShipmentPackage(0m, "Documents"));
         Assert.Throws<DomainException>(() => new ShipmentPackage(1.2345m, "Documents"));
+        Assert.Throws<DomainException>(() => new ShipmentPackage(ShipmentPackage.MaximumWeightKilograms + 0.001m, "Documents"));
+        Assert.Equal(ShipmentPackage.MaximumWeightKilograms, new ShipmentPackage(ShipmentPackage.MaximumWeightKilograms, "Documents").WeightKilograms);
     }
 
     [Fact]

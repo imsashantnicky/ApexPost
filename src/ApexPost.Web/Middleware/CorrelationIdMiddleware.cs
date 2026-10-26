@@ -14,9 +14,12 @@ public sealed class CorrelationIdMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var correlationId = context.Request.Headers.TryGetValue(HeaderName, out var incoming)
-            ? incoming.ToString()
-            : Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
+        var incomingId = context.Request.Headers.TryGetValue(HeaderName, out var incoming) ? incoming.ToString() : null;
+        var correlationId = !string.IsNullOrEmpty(incomingId)
+            && incomingId.Length <= 64
+            && incomingId.All(static character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_')
+                ? incomingId
+                : Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
 
         context.TraceIdentifier = correlationId;
         context.Response.Headers[HeaderName] = correlationId;

@@ -1,3 +1,21 @@
 @model IReadOnlyList<ApexPost.Application.Shipping.ShipmentResponse>
 @{ ViewData["Title"] = "Shipments"; }
-<h1>Shipments</h1><p><a class="btn btn-primary" asp-action="Book">Book shipment</a></p>@if (TempData["Error"] is string error) { <p class="text-danger" role="alert">@error</p> }@if (!Model.Any()) { <p>No shipments are available.</p> } else { <table class="table"><thead><tr><th>Number</th><th>Status</th><th>Charge</th><th>Action</th></tr></thead><tbody>@foreach(var item in Model){<tr><td>@item.ShipmentNumber</td><td>@item.Status</td><td>@item.ChargeAmount @item.CurrencyCode</td><td><form asp-action="Advance" method="post"><input type="hidden" name="id" value="@item.Id"/><input type="hidden" name="version" value="@item.Version"/><button name="action" value="accept">Accept</button><button name="action" value="dispatch">Dispatch</button><button name="action" value="deliver">Deliver</button><button name="action" value="cancel">Cancel</button></form></td></tr>}</tbody></table>}
+<div class="page-heading"><div><p class="eyebrow">Logistics</p><h1>Shipments</h1><p class="text-secondary">Book a shipment, preview its label, then move it through the supported status lifecycle.</p></div><a class="btn btn-primary" asp-action="Book">Book shipment</a></div>
+@if (Model.Count == 0)
+{
+    <div class="empty-state"><h2 class="h5">No shipments yet</h2><p>Shipment bookings for your permitted branch scope will appear here.</p><a class="btn btn-primary" asp-action="Book">Create first shipment</a></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Reference</th><th>Zone / level</th><th>Status</th><th>Charge</th><th>Next action</th></tr></thead><tbody>
+    @foreach (var item in Model)
+    {
+        <tr><td class="fw-semibold">@item.ShipmentNumber</td><td>@item.ZoneCode / @item.ServiceLevel</td><td><span class="badge text-bg-secondary">@item.Status</span></td><td>@item.ChargeAmount.ToString("N2") @item.CurrencyCode</td><td>
+            @if (item.Status == ApexPost.Domain.Shipping.ShipmentStatus.Booked) { <form asp-action="Advance" method="post" class="d-flex flex-wrap gap-2"><input type="hidden" name="id" value="@item.Id"/><input type="hidden" name="version" value="@item.Version"/><button class="btn btn-sm btn-primary" name="action" value="accept">Accept</button><button class="btn btn-sm btn-outline-danger" name="action" value="cancel" data-confirm="Cancel this booked shipment?">Cancel</button></form> }
+            else if (item.Status == ApexPost.Domain.Shipping.ShipmentStatus.Accepted) { <form asp-action="Advance" method="post" class="d-flex flex-wrap gap-2"><input type="hidden" name="id" value="@item.Id"/><input type="hidden" name="version" value="@item.Version"/><button class="btn btn-sm btn-primary" name="action" value="dispatch">Dispatch</button><button class="btn btn-sm btn-outline-danger" name="action" value="cancel" data-confirm="Cancel this accepted shipment?">Cancel</button></form> }
+            else if (item.Status == ApexPost.Domain.Shipping.ShipmentStatus.InTransit) { <form asp-action="Advance" method="post"><input type="hidden" name="id" value="@item.Id"/><input type="hidden" name="version" value="@item.Version"/><button class="btn btn-sm btn-primary" name="action" value="deliver">Mark delivered</button></form> }
+            else { <span class="text-secondary">No further action</span> }
+        </td></tr>
+    }
+    </tbody></table></div></div>
+}

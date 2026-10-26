@@ -1,0 +1,7 @@
+@model ApexPost.Web.Models.MoneyOrderDetailsViewModel
+@{ ViewData["Title"] = "Money order details"; }
+<div class="page-heading"><div><p class="eyebrow">Counter services</p><h1>Money order</h1><p class="text-secondary">Order @Model.MoneyOrder.OrderNumber</p></div><a class="btn btn-outline-secondary" asp-action="Create">New money order</a></div>
+@if (TempData["Status"] is string status) { <div class="alert alert-success" role="status">@status</div> }
+<div class="card"><div class="card-body"><dl class="row mb-0"><dt class="col-sm-3">Status</dt><dd class="col-sm-9"><span class="badge text-bg-secondary">@Model.MoneyOrder.Status</span></dd><dt class="col-sm-3">Amount</dt><dd class="col-sm-9">@Model.MoneyOrder.Amount.ToString("N2") @Model.MoneyOrder.CurrencyCode</dd><dt class="col-sm-3">Branch</dt><dd class="col-sm-9">@Model.MoneyOrder.OriginatingBranchId</dd><dt class="col-sm-3">Verification</dt><dd class="col-sm-9">@(Model.MoneyOrder.IdentityVerificationId is null ? "Not required" : "Verified record attached")</dd></dl>
+    @if (Model.MoneyOrder.Status == ApexPost.Domain.MoneyOrders.MoneyOrderStatus.Issued) { <form asp-action="Pay" method="post" class="mt-3"><input type="hidden" name="id" value="@Model.MoneyOrder.Id"/><input type="hidden" name="version" value="@Model.MoneyOrder.Version"/><button class="btn btn-primary">Mark paid</button></form> }
+</div></div>

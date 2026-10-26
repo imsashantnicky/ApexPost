@@ -1,0 +1,13 @@
+@model ApexPost.Web.Models.IdentityVerificationStartForm
+@{ ViewData["Title"] = "Start identity verification"; }
+<div class="page-heading"><div><p class="eyebrow">Money orders</p><h1>Start identity verification</h1><p class="text-secondary">Use a customer reference already established by the approved in-person workflow. Do not enter document numbers.</p></div></div>
+<div class="card form-card"><div class="card-body"><form asp-action="StartVerification" method="post">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div><div class="row g-3">
+        <div class="col-md-6"><label asp-for="BranchId" class="form-label">Branch</label>
+            @if (User.IsInRole("Administrator")) { <select asp-for="BranchId" class="form-select"><option value="">Choose branch</option>@foreach (var branch in Model.Branches) { <option value="@branch.Id">@branch.Name</option> }</select> }
+            else { <input asp-for="BranchId" type="hidden"/><input class="form-control" value="@(Model.Branches.FirstOrDefault()?.Name ?? "Unavailable")" readonly/> }
+            <span asp-validation-for="BranchId" class="text-danger"></span></div>
+        <div class="col-md-6"><label asp-for="SubjectId" class="form-label">Existing customer reference ID</label><input asp-for="SubjectId" class="form-control"/><span asp-validation-for="SubjectId" class="text-danger"></span></div>
+        <div class="col-md-6"><label asp-for="Method" class="form-label">Verification method</label><select asp-for="Method" class="form-select">@foreach (var method in Enum.GetValues<ApexPost.Domain.IdentityVerification.VerificationMethod>()) { <option value="@method">@method</option> }</select><span asp-validation-for="Method" class="text-danger"></span></div>
+    </div><div class="mt-4 d-flex gap-2"><button class="btn btn-primary">Start review</button><a class="btn btn-outline-secondary" asp-action="Create">Cancel</a></div>
+</form></div></div>

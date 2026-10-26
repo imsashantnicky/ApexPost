@@ -1,0 +1,41 @@
+[
+  {
+    "id": "8cf736e4c0e942b094fed2113d3c63a1",
+    "occurredAt": "2026-06-15T09:30:12.410+00:00",
+    "action": "Inventory.Adjust",
+    "entityType": "InventoryItem",
+    "entityId": "7a72d35b-9090-48cf-9fb7-970117f0e9c1",
+    "actorId": "fc207f84-d811-4de6-8a65-b4c1703d1fe3",
+    "metadata": { "Quantity": "12", "Version": "4" },
+    "actorRole": "InventoryStaff",
+    "branchId": "0e369ca2-54cd-40c7-8a31-9eac0d85b782",
+    "outcome": "Succeeded",
+    "correlationId": "sample-correlation-001"
+  },
+  {
+    "id": "c49a0cc836ad49e9a917f72e56c1e6ba",
+    "occurredAt": "2026-06-15T10:02:48.002+00:00",
+    "action": "Transaction.Refund",
+    "entityType": "RetailTransaction",
+    "entityId": "fa16ae0d-99d8-4bd8-83f8-80d46b44943b",
+    "actorId": "29c6287f-e5b8-4df3-8fbb-ffcc83ee223d",
+    "metadata": { "Status": "Reversed", "Version": "3" },
+    "actorRole": "BranchManager",
+    "branchId": "0e369ca2-54cd-40c7-8a31-9eac0d85b782",
+    "outcome": "Succeeded",
+    "correlationId": "sample-correlation-002"
+  },
+  {
+    "id": "63a2022923f74b41ad030b4ce5de20f1",
+    "occurredAt": "2026-06-15T10:10:06.112+00:00",
+    "action": "IdentityVerification.Complete",
+    "entityType": "IdentityVerification",
+    "entityId": "c182eb44-65d3-405f-8cc5-faf3bdd370b6",
+    "actorId": "29c6287f-e5b8-4df3-8fbb-ffcc83ee223d",
+    "metadata": { "Verified": "false", "Status": "Rejected" },
+    "actorRole": "BranchManager",
+    "branchId": "0e369ca2-54cd-40c7-8a31-9eac0d85b782",
+    "outcome": "Succeeded",
+    "correlationId": "sample-correlation-003"
+  }
+]

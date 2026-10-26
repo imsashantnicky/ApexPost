@@ -41,6 +41,8 @@ public sealed class PaymentRecord
 
     public string? DeclineReason { get; private set; }
 
+    public string? ReversalReason { get; private set; }
+
     internal void Confirm()
     {
         ChangeStatus(PaymentStatus.Confirmed, "Only a pending payment can be confirmed.");
@@ -64,13 +66,16 @@ public sealed class PaymentRecord
         ChangeStatus(PaymentStatus.Cancelled, "Only a pending payment can be cancelled.");
     }
 
-    internal void Reverse()
+    internal void Reverse(string reason)
     {
         if (Status != PaymentStatus.Confirmed)
         {
             throw new DomainException("Only a confirmed payment can be reversed.");
         }
 
+        var normalized = reason?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 250) throw new DomainException("Refund reason is required and must not exceed 250 characters.");
+        ReversalReason = normalized;
         Status = PaymentStatus.Reversed;
     }
 

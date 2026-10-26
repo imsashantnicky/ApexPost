@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Claims;
-using ApexPost.Infrastructure.Persistence.Json;
+using ApexPost.Application.Security;
+using ApexPost.Web.Services;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 
@@ -11,8 +12,7 @@ namespace ApexPost.Web.Filters;
 /// route values, headers, or model data that could contain secrets or personal information.
 /// </summary>
 public sealed class AuditActionFilter(
-    JsonAuditWriter auditWriter,
-    ILogger<AuditActionFilter> logger) : IAsyncActionFilter
+    IAccessAuditWriter auditWriter) : IAsyncActionFilter
 {
     public async Task OnActionExecutionAsync(
         ActionExecutingContext context,
@@ -49,28 +49,15 @@ public sealed class AuditActionFilter(
                 ["CorrelationId"] = httpContext.TraceIdentifier
             };
 
-            try
-            {
-                var actorId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
-                await auditWriter.WriteAsync(
-                    "Mvc.ActionCompleted",
-                    "MvcAction",
-                    $"{controller}.{action}",
-                    actorId,
-                    metadata,
-                    httpContext.RequestAborted);
-            }
-            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
-            {
-                // Client cancellation must not be reported as an application fault.
-            }
-            catch (Exception exception)
-            {
-                // Do not let a secondary audit-store failure hide the original action result.
-                logger.LogError(exception,
-                    "Unable to persist MVC action audit record. CorrelationId: {CorrelationId}",
-                    httpContext.TraceIdentifier);
-            }
+            var actorId = httpContext.User.FindFirstValue(ActorClaimTypes.StaffId);
+            var branchClaim = httpContext.User.FindFirstValue(ActorClaimTypes.AssignedBranchId);
+            var branchId = Guid.TryParse(branchClaim, out var parsedBranch) ? parsedBranch : (Guid?)null;
+            var role = httpContext.User.FindFirstValue(ClaimTypes.Role);
+            ActorContext? actor = Guid.TryParse(actorId, out var parsedActor) && !string.IsNullOrWhiteSpace(role)
+                ? new ActorContext(parsedActor, role, branchId, httpContext.TraceIdentifier)
+                : null;
+            await auditWriter.WriteOperationAsync(actor, branchId, "Mvc.ActionCompleted", "MvcAction",
+                $"{controller}.{action}", statusCode < 400 ? "Succeeded" : "Failed", metadata, httpContext.RequestAborted);
         }
     }
 

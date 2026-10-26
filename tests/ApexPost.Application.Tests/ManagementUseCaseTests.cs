@@ -15,7 +15,7 @@ public class ManagementUseCaseTests
     public async Task BranchCreateRetrieveUpdateAndDeactivateFollowDomainRules()
     {
         var repository = new BranchRepositoryDouble();
-        var useCase = new BranchManagementUseCase(repository);
+        var useCase = NewBranchUseCase(repository);
         var created = await useCase.CreateAsync(new("BLR-001", "Central", "1 Market Road", null, "Bengaluru", "560001", "IN", 2), default);
 
         var fetched = await useCase.GetAsync(created.Value.Id, default);
@@ -31,7 +31,7 @@ public class ManagementUseCaseTests
     public async Task BranchCreateRejectsDuplicateCodeAndUpdateReportsConcurrencyConflict()
     {
         var repository = new BranchRepositoryDouble();
-        var useCase = new BranchManagementUseCase(repository);
+        var useCase = NewBranchUseCase(repository);
         var created = await useCase.CreateAsync(new("BLR-001", "Central", "1 Road", null, "Bengaluru", "560001", "IN", 1), default);
 
         var duplicate = await useCase.CreateAsync(new("blr-001", "Other", "2 Road", null, "Bengaluru", "560001", "IN", 1), default);
@@ -44,7 +44,7 @@ public class ManagementUseCaseTests
     [Fact]
     public async Task BranchCreateMapsDomainValidationToFailure()
     {
-        var result = await new BranchManagementUseCase(new BranchRepositoryDouble())
+        var result = await NewBranchUseCase(new BranchRepositoryDouble())
             .CreateAsync(new("BAD", "", "", null, "", "", "", 0), default);
 
         Assert.False(result.IsSuccess);
@@ -55,7 +55,7 @@ public class ManagementUseCaseTests
     public async Task StaffCreateRetrieveUpdateAndDeactivateFollowDomainRules()
     {
         var repository = new StaffRepositoryDouble();
-        var useCase = new StaffManagementUseCase(repository);
+        var useCase = NewStaffUseCase(repository);
         var branchId = Guid.NewGuid();
         var created = await useCase.CreateAsync(new("EMP-0001", "Asha Rao", branchId, [StaffRole.CounterClerk]), default);
 
@@ -71,7 +71,7 @@ public class ManagementUseCaseTests
     [Fact]
     public async Task StaffCreateRejectsDuplicateEmployeeNumber()
     {
-        var useCase = new StaffManagementUseCase(new StaffRepositoryDouble());
+        var useCase = NewStaffUseCase(new StaffRepositoryDouble());
         await useCase.CreateAsync(new("EMP-0001", "Asha Rao", Guid.NewGuid(), [StaffRole.CounterClerk]), default);
 
         var result = await useCase.CreateAsync(new("emp-0001", "Rahul Verma", Guid.NewGuid(), [StaffRole.CounterClerk]), default);
@@ -121,6 +121,18 @@ public class ManagementUseCaseTests
             if (!items.TryGetValue(branch.Id.Value, out var current) || current.Version != expectedVersion) return Task.FromResult(false);
             items[branch.Id.Value] = new(branch, expectedVersion + 1); return Task.FromResult(true);
         }
+    }
+
+    private static BranchManagementUseCase NewBranchUseCase(IBranchRepository repository) => new(repository, new TestActor(), new TestAudit());
+    private static StaffManagementUseCase NewStaffUseCase(IStaffRepository repository) => new(repository, new TestActor(), new TestAudit());
+    private sealed class TestActor : ApexPost.Application.Security.ICurrentActor
+    {
+        public ApexPost.Application.Security.ActorContext? Actor { get; } = new(Guid.NewGuid(), "Administrator", Guid.NewGuid(), "management-test");
+    }
+    private sealed class TestAudit : ApexPost.Application.Security.IAccessAuditWriter
+    {
+        public Task WriteAdministratorCrossBranchAccessAsync(ApexPost.Application.Security.ActorContext actor, Guid branchId, string operation, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task WriteOperationAsync(ApexPost.Application.Security.ActorContext? actor, Guid? branchId, string operation, string targetType, string targetReference, string outcome, IReadOnlyDictionary<string, string>? safeMetadata, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class StaffRepositoryDouble : IStaffRepository

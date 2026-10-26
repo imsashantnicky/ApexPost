@@ -1,49 +1,38 @@
-# ADR-006: Operational auditing with sensitive-field rejection
+# ADR-006: Application-boundary auditing with safe failure semantics
 
 - Status: Accepted
-- Related files: `src/ApexPost.Infrastructure/Persistence/Json/JsonAuditWriter.cs`
+- Related files: `src/ApexPost.Application/Security/OperationalAccess.cs`, `src/ApexPost.Infrastructure/Persistence/Json/JsonAuditWriter.cs`, `src/ApexPost.Web/Filters/AuditActionFilter.cs`
 
 ## Context
 
-Operational systems need an audit trail for actions and state changes but must avoid capturing secrets, payment-data fields, tokens, identity document values, and authentication material. The JSON repository is intentionally lightweight and local, so the audit layer must reject dangerous metadata before writing.
+Operational systems need an append-only audit trail for sensitive state changes and rejected access while avoiding secrets, payment data, identity-document values, authentication material, and free-form request content. MVC-only auditing is insufficient because application use cases can also run outside HTTP. JSON persistence remains the selected storage architecture.
 
 ## Decision
 
-`JsonAuditWriter` records action, entity type, entity ID, optional actor ID, UTC timestamp, and a metadata dictionary. Before persisting metadata it rejects keys and values containing sensitive fragments such as:
+Use cases and `OperationalAccess` depend on `IAccessAuditWriter`; Infrastructure implements it with `JsonAuditWriter`. Records carry UTC timestamp, actor/staff ID and role when resolved, validated branch, operation, target, outcome, correlation ID, and allowlisted safe metadata. Sensitive mutations append `Started` before business persistence and a terminal event afterward. Authorization denials are recorded at the Application access boundary. The MVC `AuditActionFilter` records only controlled action name, method, status, elapsed time, and correlation ID; it propagates audit failures.
 
-- password
-- token
-- secret
-- card
-- credential
-- payment
-- identity
-- address
-- email
-- phone
-- session
-- auth
+The writer accepts a small set of metadata keys and rejects unsupported keys or values containing sensitive fragments. The audit collection is written through `JsonCollectionStore<T>`, which serializes same-process writers and atomically replaces a complete JSON file via a temporary file. Malformed JSON is not auto-repaired; the write fails and the existing file is preserved.
 
-These checks are enforced before writing a JSON audit record, preventing accidental leaks while preserving operational traceability.
+An audit failure before a mutation prevents that mutation. A failure to append the terminal event after business persistence propagates through global safe exception handling while leaving the preceding `Started` event available for reconciliation. It does not claim a complete audit. JSON cannot make separate business and audit collection writes atomic. A caller may receive an error even if a preceding business write completed; operators must reconcile unresolved `Started` records. This is the explicit failure policy available without a transactional database.
 
 ## Alternatives considered
 
 1. Persist raw request payloads directly
-   - rejected because it would capture credentials and personal data
+   - Rejected because payloads can contain credentials and personal data.
 2. Skip audit logging entirely
-   - rejected because it removes operational traceability for recovery and review
-3. Store large unfiltered logs in a plaintext file
-   - rejected because it introduces unnecessary data exposure risk
+   - Rejected because it removes operational traceability.
+3. Swallow audit-write failures to keep requests successful
+   - Rejected because that silently represents an unaudited operation as complete.
+4. Introduce a database for audit persistence
+   - Deferred to preserve the approved JSON-only architecture.
 
 ## Consequences
 
-- Operational reviews remain useful without storing hazardous values.
-- Some metadata is intentionally discarded when it contains sensitive fragments.
-- The audit model is local and file-based rather than a full SIEM platform.
-
-## Security and operational implications
-
-The implementation improves operational safety while still keeping a useful local audit trail. It does not replace a dedicated enterprise logging or SIEM solution for larger deployments.
+- Application-level events and denied access can be correlated without storing hazardous values.
+- Unsafe or non-allowlisted metadata is rejected rather than silently persisted.
+- A Started record can require reconciliation if a later persistence step fails.
+- JSON provides process-local concurrency protection and replacement writes, but no tamper resistance, cross-process coordination, or atomic business-plus-audit transactions.
+- The local file is not a replacement for centralized protected audit retention or a SIEM.
 
 ## Related decisions
 

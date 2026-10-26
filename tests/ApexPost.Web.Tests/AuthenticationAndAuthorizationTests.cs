@@ -1,3 +1,7 @@
+using ApexPost.Application.Persistence;
+using ApexPost.Application.Staff;
+using ApexPost.Domain.Common;
+using ApexPost.Domain.Staff;
 using ApexPost.Infrastructure.Persistence.Json;
 using ApexPost.Web.Controllers;
 using ApexPost.Web.Models;
@@ -26,16 +30,16 @@ public class AuthenticationAndAuthorizationTests : IDisposable
     }
 
     [Theory]
-    [InlineData(typeof(BranchesController))]
-    [InlineData(typeof(StaffController))]
-    [InlineData(typeof(CatalogueController))]
-    [InlineData(typeof(InventoryController))]
-    [InlineData(typeof(ShipmentsController))]
-    [InlineData(typeof(MoneyOrdersController))]
-    public void ManagementControllersRequireManagementPolicy(Type controllerType)
+    [InlineData(typeof(BranchesController), "AdministratorOnly")]
+    [InlineData(typeof(StaffController), "AdministratorOnly")]
+    [InlineData(typeof(CatalogueController), "AdministratorOnly")]
+    [InlineData(typeof(InventoryController), "InventoryOperations")]
+    [InlineData(typeof(ShipmentsController), "CounterOperations")]
+    [InlineData(typeof(MoneyOrdersController), "CounterOperations")]
+    public void ControllersRequireNarrowRolePolicies(Type controllerType, string policy)
     {
         var attribute = Assert.Single(controllerType.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
-        Assert.Equal("Management", attribute.Policy);
+        Assert.Equal(policy, attribute.Policy);
     }
 
     [Fact]
@@ -96,16 +100,6 @@ public class AuthenticationAndAuthorizationTests : IDisposable
     }
 
     [Fact]
-    public void BranchAccessIsRestrictedToAssignedBranchForNonAdministrators()
-    {
-        Assert.True(LocalAccountService.CanAccessBranch(LocalAccountService.AdministratorRole, "BR-001", "BR-999"));
-        Assert.True(LocalAccountService.CanAccessBranch(LocalAccountService.AdministratorRole, null, "BR-999"));
-        Assert.False(LocalAccountService.CanAccessBranch(LocalAccountService.CounterStaffRole, "BR-001", "BR-002"));
-        Assert.True(LocalAccountService.CanAccessBranch(LocalAccountService.CounterStaffRole, "BR-001", "BR-001"));
-        Assert.True(LocalAccountService.CanAccessBranch(LocalAccountService.AuditorRole, "BR-001", "BR-999"));
-    }
-
-    [Fact]
     public void AuditorRoleIsReadOnlyAndDashboardRoutingMatchesRole()
     {
         Assert.True(LocalAccountService.IsReadOnlyRole(LocalAccountService.AuditorRole));
@@ -120,24 +114,35 @@ public class AuthenticationAndAuthorizationTests : IDisposable
     public async Task DevelopmentAccountInitializationCreatesConfiguredRolesOnlyInDevelopment()
     {
         var service = new LocalAccountService(new JsonDataOptions { DataDirectory = directory });
+        var staff = new[]
+        {
+            DevelopmentStaff(1, StaffRole.Administrator), DevelopmentStaff(2, StaffRole.BranchManager),
+            DevelopmentStaff(3, StaffRole.CounterClerk), DevelopmentStaff(4, StaffRole.InventoryClerk),
+            DevelopmentStaff(5, StaffRole.CounterClerk)
+        };
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ApexPost:DevelopmentAccounts:Enabled"] = "true",
                 ["ApexPost:DevelopmentAccounts:Administrator:UserName"] = "admin.dev",
                 ["ApexPost:DevelopmentAccounts:Administrator:Password"] = "ChangeThis-StrongDevPass-123!",
+                ["ApexPost:DevelopmentAccounts:Administrator:StaffId"] = staff[0].Id.Value.ToString("D"),
                 ["ApexPost:DevelopmentAccounts:BranchManager:UserName"] = "branch.dev",
                 ["ApexPost:DevelopmentAccounts:BranchManager:Password"] = "ChangeThis-StrongDevPass-456!",
+                ["ApexPost:DevelopmentAccounts:BranchManager:StaffId"] = staff[1].Id.Value.ToString("D"),
                 ["ApexPost:DevelopmentAccounts:CounterStaff:UserName"] = "counter.dev",
                 ["ApexPost:DevelopmentAccounts:CounterStaff:Password"] = "ChangeThis-StrongDevPass-789!",
+                ["ApexPost:DevelopmentAccounts:CounterStaff:StaffId"] = staff[2].Id.Value.ToString("D"),
                 ["ApexPost:DevelopmentAccounts:InventoryStaff:UserName"] = "inventory.dev",
                 ["ApexPost:DevelopmentAccounts:InventoryStaff:Password"] = "ChangeThis-StrongDevPass-101!",
+                ["ApexPost:DevelopmentAccounts:InventoryStaff:StaffId"] = staff[3].Id.Value.ToString("D"),
                 ["ApexPost:DevelopmentAccounts:Auditor:UserName"] = "auditor.dev",
-                ["ApexPost:DevelopmentAccounts:Auditor:Password"] = "ChangeThis-StrongDevPass-202!"
+                ["ApexPost:DevelopmentAccounts:Auditor:Password"] = "ChangeThis-StrongDevPass-202!",
+                ["ApexPost:DevelopmentAccounts:Auditor:StaffId"] = staff[4].Id.Value.ToString("D")
             })
             .Build();
 
-        await service.InitializeDevelopmentAccountsAsync(new TestEnvironment("Development"), config, default);
+        await service.InitializeDevelopmentAccountsAsync(new TestEnvironment("Development"), config, new DevelopmentStaffRepository(staff), default);
 
         Assert.True(await service.HasAccountAsync("admin.dev", default));
         Assert.True(await service.HasAccountAsync("branch.dev", default));
@@ -159,7 +164,7 @@ public class AuthenticationAndAuthorizationTests : IDisposable
             })
             .Build();
 
-        await service.InitializeDevelopmentAccountsAsync(new TestEnvironment("Production"), config, default);
+        await service.InitializeDevelopmentAccountsAsync(new TestEnvironment("Production"), config, new DevelopmentStaffRepository([]), default);
 
         Assert.False(await service.HasAccountAsync("prodadmin.dev", default));
     }
@@ -205,5 +210,16 @@ public class AuthenticationAndAuthorizationTests : IDisposable
         public string EnvironmentName { get; set; } = environmentName;
         public string ContentRootPath { get; set; } = string.Empty;
         public IFileProvider ContentRootFileProvider { get; set; } = null!;
+    }
+
+    private static StaffMember DevelopmentStaff(int suffix, StaffRole role) => new(
+        EntityId.New(), EmployeeNumber.From($"EMP-{suffix:0000}"), $"Development Staff {suffix}", EntityId.New(), [role]);
+
+    private sealed class DevelopmentStaffRepository(IReadOnlyList<StaffMember> staff) : IStaffRepository
+    {
+        public Task<IReadOnlyList<Versioned<StaffMember>>> ListAsync(CancellationToken token) => Task.FromResult<IReadOnlyList<Versioned<StaffMember>>>(staff.Select(x => new Versioned<StaffMember>(x, 1)).ToArray());
+        public Task<Versioned<StaffMember>?> GetByIdAsync(EntityId id, CancellationToken token) => Task.FromResult(staff.Where(x => x.Id == id).Select(x => (Versioned<StaffMember>?)new(x, 1)).SingleOrDefault());
+        public Task<bool> TryAddAsync(StaffMember value, CancellationToken token) => Task.FromResult(false);
+        public Task<bool> TryUpdateAsync(StaffMember value, long version, CancellationToken token) => Task.FromResult(false);
     }
 }

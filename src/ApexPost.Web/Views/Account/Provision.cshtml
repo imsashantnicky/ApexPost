@@ -8,6 +8,7 @@
     <label asp-for="UserName"></label><input asp-for="UserName" autocomplete="username" /><span asp-validation-for="UserName"></span>
     <label asp-for="Password"></label><input asp-for="Password" autocomplete="new-password" /><span asp-validation-for="Password"></span>
     <label asp-for="ConfirmPassword"></label><input asp-for="ConfirmPassword" autocomplete="new-password" /><span asp-validation-for="ConfirmPassword"></span>
-    <label asp-for="Role"></label><select asp-for="Role"><option>CounterClerk</option><option>BranchManager</option><option>Administrator</option></select><span asp-validation-for="Role"></span>
+    <label asp-for="Role"></label><select asp-for="Role"><option>CounterStaff</option><option>BranchManager</option><option>InventoryStaff</option><option>Administrator</option><option>Auditor</option></select><span asp-validation-for="Role"></span>
+    <label asp-for="StaffId">Linked active staff member</label><select asp-for="StaffId"><option value="">Select staff</option>@foreach (var staff in Model.Staff) { <option value="@staff.Id">@staff.EmployeeNumber — @staff.Name (@staff.BranchName)</option> }</select><span asp-validation-for="StaffId"></span>
     <button type="submit">Create account</button>
 </form>

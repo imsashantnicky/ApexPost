@@ -4,13 +4,15 @@ namespace ApexPost.Domain.Transactions;
 
 public sealed class TransactionLineItem
 {
-    internal TransactionLineItem(EntityId id, EntityId serviceId, string description, int quantity, decimal unitPrice)
+    internal TransactionLineItem(EntityId id, EntityId serviceId, string description, int quantity, decimal unitPrice, TransactionLineKind kind = TransactionLineKind.Service)
     {
         Id = id;
         ServiceId = serviceId;
         Description = RequiredDescription(description);
         Quantity = ValidQuantity(quantity);
         UnitPrice = ValidUnitPrice(unitPrice);
+        if (!Enum.IsDefined(kind)) throw new DomainException("Transaction line kind must be recognized.");
+        Kind = kind;
     }
 
     public EntityId Id { get; }
@@ -22,6 +24,8 @@ public sealed class TransactionLineItem
     public int Quantity { get; }
 
     public decimal UnitPrice { get; }
+
+    public TransactionLineKind Kind { get; }
 
     public decimal Total => Quantity * UnitPrice;
 
