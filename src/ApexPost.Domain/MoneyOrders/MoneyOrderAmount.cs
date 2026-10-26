@@ -15,7 +15,7 @@ public sealed class MoneyOrderAmount : ValueObject
         CurrencyCode = ApexPost.Domain.Common.CurrencyCode.From(currencyCode).Value;
     }
 
-    public decimal Amount { get; }
+    public decimal Amount { get; private set => field = value; }
 
     public string CurrencyCode { get; }
 
