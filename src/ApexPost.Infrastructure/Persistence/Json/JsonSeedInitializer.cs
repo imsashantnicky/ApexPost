@@ -46,6 +46,10 @@ public sealed class JsonSeedInitializer
             await ValidateExistingFilesAsync(
                 existingBusinessFiles,
                 cancellationToken);
+
+            // Existing business data is user-owned. Validate it, then skip
+            // demo seeding so startup never rewrites an existing dataset.
+            return;
         }
 
 
