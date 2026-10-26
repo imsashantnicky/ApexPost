@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Security.Claims;
-using ApexPost.Application.Security;
-using ApexPost.Web.Services;
+using ApexPost.Infrastructure.Persistence.Json;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 
@@ -12,7 +11,8 @@ namespace ApexPost.Web.Filters;
 /// route values, headers, or model data that could contain secrets or personal information.
 /// </summary>
 public sealed class AuditActionFilter(
-    IAccessAuditWriter auditWriter) : IAsyncActionFilter
+    JsonAuditWriter auditWriter,
+    ILogger<AuditActionFilter> logger) : IAsyncActionFilter
 {
     public async Task OnActionExecutionAsync(
         ActionExecutingContext context,
@@ -49,15 +49,44 @@ public sealed class AuditActionFilter(
                 ["CorrelationId"] = httpContext.TraceIdentifier
             };
 
-            var actorId = httpContext.User.FindFirstValue(ActorClaimTypes.StaffId);
-            var branchClaim = httpContext.User.FindFirstValue(ActorClaimTypes.AssignedBranchId);
-            var branchId = Guid.TryParse(branchClaim, out var parsedBranch) ? parsedBranch : (Guid?)null;
-            var role = httpContext.User.FindFirstValue(ClaimTypes.Role);
-            ActorContext? actor = Guid.TryParse(actorId, out var parsedActor) && !string.IsNullOrWhiteSpace(role)
-                ? new ActorContext(parsedActor, role, branchId, httpContext.TraceIdentifier)
-                : null;
-            await auditWriter.WriteOperationAsync(actor, branchId, "Mvc.ActionCompleted", "MvcAction",
-                $"{controller}.{action}", statusCode < 400 ? "Succeeded" : "Failed", metadata, httpContext.RequestAborted);
+            // Record authorization context without capturing request data or personal information.
+            var actorRole = httpContext.User.FindFirstValue(ClaimTypes.Role);
+            if (!string.IsNullOrWhiteSpace(actorRole))
+            {
+                metadata["ActorRole"] = actorRole;
+            }
+
+            var branchId = httpContext.User.FindFirst("branch_id")?.Value
+                ?? httpContext.User.FindFirst("BranchId")?.Value;
+            if (!string.IsNullOrWhiteSpace(branchId)
+                && branchId.Length <= 64
+                && branchId.All(static character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_'))
+            {
+                metadata["BranchId"] = branchId;
+            }
+
+            try
+            {
+                var actorId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+                await auditWriter.WriteAsync(
+                    "Mvc.ActionCompleted",
+                    "MvcAction",
+                    $"{controller}.{action}",
+                    actorId,
+                    metadata,
+                    httpContext.RequestAborted);
+            }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+            {
+                // Client cancellation must not be reported as an application fault.
+            }
+            catch (Exception exception)
+            {
+                // Do not let a secondary audit-store failure hide the original action result.
+                logger.LogError(exception,
+                    "Unable to persist MVC action audit record. CorrelationId: {CorrelationId}",
+                    httpContext.TraceIdentifier);
+            }
         }
     }
 
