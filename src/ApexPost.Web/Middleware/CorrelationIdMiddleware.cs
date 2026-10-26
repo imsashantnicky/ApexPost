@@ -2,9 +2,14 @@ using System.Diagnostics;
 
 namespace ApexPost.Web.Middleware;
 
+/// <summary>
+/// Establishes a bounded correlation identifier for diagnostics.
+/// Incoming values are untrusted: only short, log-safe identifiers are accepted.
+/// </summary>
 public sealed class CorrelationIdMiddleware
 {
     private const string HeaderName = "X-Correlation-ID";
+    private const int MaximumCorrelationIdLength = 64;
     private readonly RequestDelegate next;
 
     public CorrelationIdMiddleware(RequestDelegate next)
@@ -14,9 +19,12 @@ public sealed class CorrelationIdMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         var correlationId = context.Request.Headers.TryGetValue(HeaderName, out var incoming)
-            ? incoming.ToString()
-            : Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
+            && IsSafeCorrelationId(incoming.ToString())
+                ? incoming.ToString()
+                : Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
 
         context.TraceIdentifier = correlationId;
         context.Response.Headers[HeaderName] = correlationId;
@@ -29,6 +37,13 @@ public sealed class CorrelationIdMiddleware
         using var activity = new Activity("ApexPostRequest");
         activity.SetParentId(correlationId);
         activity.Start();
+
         await next(context);
     }
+
+    private static bool IsSafeCorrelationId(string value) =>
+        value.Length is > 0 and <= MaximumCorrelationIdLength
+        && value.All(static character =>
+            char.IsAsciiLetterOrDigit(character)
+            || character is '-' or '_' or '.');
 }
