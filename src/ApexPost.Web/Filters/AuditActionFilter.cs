@@ -66,7 +66,8 @@ public sealed class AuditActionFilter(
             logger.LogError(
                 "Audit write failed for {Controller}.{Action}; TraceIdentifier={TraceIdentifier}; ExceptionType={ExceptionType}",
                 controller, action, context.HttpContext.TraceIdentifier, exception.GetType().Name);
-            throw;
+            // Do not turn an already-executed mutation into a misleading HTTP failure.
+            // Production deployments should alert on this event and use durable audit storage.
         }
     }
 }
