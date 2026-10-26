@@ -1,3 +1,4 @@
+using Xunit;
 using ApexPost.Web.Extensions;
 using ApexPost.Web.Middleware;
 using Microsoft.AspNetCore.Http;
