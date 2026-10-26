@@ -50,4 +50,18 @@ public sealed class CorrelationIdMiddlewareTests
         Assert.NotEqual(new string('a', 100), context.TraceIdentifier);
         Assert.True(context.TraceIdentifier.Length <= 64);
     }
+    [Fact]
+    public async Task GeneratesCorrelationIdWhenIncomingValueIsMissing()
+    {
+        var context = new DefaultHttpContext();
+        var middleware = new CorrelationIdMiddleware(_ => Task.CompletedTask);
+
+        await middleware.InvokeAsync(context);
+
+        var correlationId = context.Response.Headers["X-Correlation-ID"].ToString();
+
+        Assert.False(string.IsNullOrWhiteSpace(correlationId));
+        Assert.True(correlationId.Length <= 64);
+        Assert.Equal(correlationId, context.TraceIdentifier);
+    }
 }
