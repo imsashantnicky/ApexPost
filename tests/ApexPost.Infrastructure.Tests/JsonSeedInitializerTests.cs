@@ -48,28 +48,67 @@ public class JsonSeedInitializerTests : IDisposable
         Assert.False(Directory.Exists(directory));
     }
 
-    [Fact]
-    public async Task ExistingRecordsArePreserved()
+
+[Fact]
+public async Task ExistingRecordsArePreserved()
+{
+    var initializer = Initializer(enabled: true);
+    await initializer.InitializeAsync(default);
+
+    var path = Path.Combine(directory, "branches.json");
+
+    var records = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+        await File.ReadAllTextAsync(path))!;
+
+    var firstRecord = records.First();
+
+    var singleRecordJson = JsonSerializer.Serialize(
+        new Dictionary<string, JsonElement>
+        {
+            [firstRecord.Key] = firstRecord.Value
+        });
+
+    await File.WriteAllTextAsync(path, singleRecordJson);
+
+    JsonElement preservedValue;
+
+    using (var beforeDocument = JsonDocument.Parse(
+        await File.ReadAllTextAsync(path)))
     {
-        var initializer = Initializer(enabled: true);
-        await initializer.InitializeAsync(default);
-        var path = Path.Combine(directory, "branches.json");
-        var records = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(await File.ReadAllTextAsync(path))!;
-        var firstRecord = records.First();
-        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(new Dictionary<string, JsonElement> { [firstRecord.Key] = firstRecord.Value }));
-        var preservedValue = firstRecord.Value.GetRawText();
-        foreach (var file in new[] { "staff.json", "catalogue.json", "pricing.json" })
-            File.Delete(Path.Combine(directory, file));
-
-        await initializer.InitializeAsync(default);
-
-        var restored = JsonDocument.Parse(await File.ReadAllTextAsync(path)).RootElement;
-        Assert.Equal(15, restored.EnumerateObject().Count());
-        Assert.Equal(preservedValue, restored.GetProperty(firstRecord.Key).GetRawText());
-        Assert.Equal(20, await CountAsync("staff.json"));
-        Assert.Equal(30, await CountAsync("catalogue.json"));
-        Assert.Equal(30, await CountAsync("pricing.json"));
+        preservedValue = beforeDocument.RootElement
+            .GetProperty(firstRecord.Key)
+            .Clone();
     }
+
+    foreach (var file in new[]
+    {
+        "staff.json",
+        "catalogue.json",
+        "pricing.json"
+    })
+    {
+        File.Delete(Path.Combine(directory, file));
+    }
+
+    await initializer.InitializeAsync(default);
+
+    using var restoredDocument = JsonDocument.Parse(
+        await File.ReadAllTextAsync(path));
+
+    var restored = restoredDocument.RootElement;
+
+    Assert.Equal(15, restored.EnumerateObject().Count());
+
+    Assert.True(
+        JsonElement.DeepEquals(
+            preservedValue,
+            restored.GetProperty(firstRecord.Key)),
+        "The existing branch record must retain its JSON value.");
+
+    Assert.Equal(20, await CountAsync("staff.json"));
+    Assert.Equal(30, await CountAsync("catalogue.json"));
+    Assert.Equal(30, await CountAsync("pricing.json"));
+}
 
     [Fact]
     public async Task CorruptExistingDataStopsInitializationWithoutReplacingIt()
