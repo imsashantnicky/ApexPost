@@ -1,6 +1,7 @@
 using ApexPost.Web.Controllers;
 using ApexPost.Web.Filters;
 using ApexPost.Web.Middleware;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -36,9 +37,9 @@ public sealed class SecurityAndActionFilterTests
         await middleware.InvokeAsync(context);
         await context.Response.StartAsync();
 
-        Assert.Equal("nosniff", context.Response.Headers["X-Content-Type-Options"]);
-        Assert.Equal("DENY", context.Response.Headers["X-Frame-Options"]);
-        Assert.Equal("strict-origin-when-cross-origin", context.Response.Headers["Referrer-Policy"]);
+        Assert.Equal("nosniff", context.Response.Headers["X-Content-Type-Options"].ToString());
+        Assert.Equal("DENY", context.Response.Headers["X-Frame-Options"].ToString());
+        Assert.Equal("strict-origin-when-cross-origin", context.Response.Headers["Referrer-Policy"].ToString());
         Assert.Contains("frame-ancestors 'none'", context.Response.Headers["Content-Security-Policy"].ToString());
     }
 }
