@@ -8,6 +8,7 @@ using ApexPost.Application.Staff;
 using ApexPost.Application.Transactions;
 using ApexPost.Infrastructure.Persistence.Json;
 using ApexPost.Web.Health;
+using ApexPost.Web.Filters;
 using ApexPost.Web.Middleware;
 using ApexPost.Web.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -17,7 +18,16 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
+builder.Services.AddScoped<AuditActionFilter>();
+builder.Services.AddScoped<ValidationActionFilter>();
+builder.Services.AddScoped<PerformanceActionFilter>();
+builder.Services.AddControllersWithViews(options =>
+{
+    options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+    options.Filters.AddService<AuditActionFilter>();
+    options.Filters.AddService<ValidationActionFilter>();
+    options.Filters.AddService<PerformanceActionFilter>();
+});
 builder.Services.AddHealthChecks()
     .AddCheck<SafeReadinessCheck>("ready")
     .AddCheck<SafeLivenessCheck>("live");
@@ -29,7 +39,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.Name = "ApexPost.Auth";
         options.Cookie.HttpOnly = true;
         options.Cookie.IsEssential = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
@@ -48,7 +58,7 @@ builder.Services.AddAntiforgery(options =>
 {
     options.Cookie.Name = "ApexPost.Antiforgery";
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
 builder.Services.AddRateLimiter(options => options.AddFixedWindowLimiter("login", limiter => { limiter.PermitLimit = 5; limiter.Window = TimeSpan.FromMinutes(1); limiter.QueueLimit = 0; }));
@@ -95,6 +105,7 @@ else
 
 app.UseHttpsRedirection();
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseRouting();
 app.UseCookiePolicy();
 
