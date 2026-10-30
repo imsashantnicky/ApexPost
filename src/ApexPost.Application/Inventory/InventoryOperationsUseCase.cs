@@ -23,14 +23,13 @@ public sealed class InventoryOperationsUseCase
 
     public async Task<ApplicationResult<IReadOnlyList<InventoryItemResponse>>> ListAsync(CancellationToken cancellationToken)
     {
-        var actorCheck = await access.CheckCurrentBranchAsync(OperationalCapability.Inventory, "Inventory.List", cancellationToken);
-        if (!actorCheck.IsSuccess) return Failure<IReadOnlyList<InventoryItemResponse>>(actorCheck.Errors);
+        var scope = await access.AuthorizeListAsync(OperationalCapability.Inventory, "Inventory.List", cancellationToken);
+        if (!scope.IsSuccess) return Failure<IReadOnlyList<InventoryItemResponse>>(scope.Errors);
         var items = await repository.ListAsync(cancellationToken);
-        var result = new List<InventoryItemResponse>();
-        foreach (var item in items)
-            if ((await access.CheckAsync(item.Value.BranchId.Value, OperationalCapability.Inventory, "Inventory.List", cancellationToken)).IsSuccess)
-                result.Add(ToResponse(item.Value, item.Version));
-        return ApplicationResults.Success<IReadOnlyList<InventoryItemResponse>>(result);
+        return ApplicationResults.Success<IReadOnlyList<InventoryItemResponse>>(items
+            .Where(item => scope.Value.Includes(item.Value.BranchId.Value))
+            .Select(item => ToResponse(item.Value, item.Version))
+            .ToArray());
     }
     public async Task<ApplicationResult<InventoryItemResponse>> CreateAsync(CreateInventoryItemRequest request, CancellationToken cancellationToken)
     {

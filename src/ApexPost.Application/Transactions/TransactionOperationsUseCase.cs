@@ -48,15 +48,14 @@ public sealed class TransactionOperationsUseCase
 
     public async Task<ApplicationResult<IReadOnlyList<TransactionResponse>>> ListAsync(CancellationToken cancellationToken)
     {
-        var actorCheck = await access.CheckCurrentBranchAsync(OperationalCapability.Counter, "Transaction.List", cancellationToken);
-        if (!actorCheck.IsSuccess) return ApplicationResults.Failure<IReadOnlyList<TransactionResponse>>(actorCheck.Errors);
-        var transactions = new List<TransactionResponse>();
-        foreach (var item in await repository.ListAsync(cancellationToken))
-        {
-            var permitted = await access.CheckAsync(item.Value.BranchId.Value, OperationalCapability.Counter, "Transaction.List", cancellationToken, requireOpenBranch: false);
-            if (permitted.IsSuccess) transactions.Add(ToResponse(item.Value, item.Version));
-        }
-        return ApplicationResults.Success<IReadOnlyList<TransactionResponse>>(transactions.OrderBy(item => item.CounterReference, StringComparer.OrdinalIgnoreCase).ToArray());
+        var scope = await access.AuthorizeListAsync(OperationalCapability.Counter, "Transaction.List", cancellationToken);
+        if (!scope.IsSuccess) return ApplicationResults.Failure<IReadOnlyList<TransactionResponse>>(scope.Errors);
+        var transactions = await repository.ListAsync(cancellationToken);
+        return ApplicationResults.Success<IReadOnlyList<TransactionResponse>>(transactions
+            .Where(item => scope.Value.Includes(item.Value.BranchId.Value))
+            .Select(item => ToResponse(item.Value, item.Version))
+            .OrderBy(item => item.CounterReference, StringComparer.OrdinalIgnoreCase)
+            .ToArray());
     }
 
     public async Task<ApplicationResult<TransactionResponse>> AddLineAsync(AddTransactionLineRequest request, CancellationToken cancellationToken)

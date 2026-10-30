@@ -83,14 +83,7 @@ public sealed class OperationalReportService
             if (!authorized.IsSuccess) return ApplicationResults.Failure<OperationalSummaryReport>(authorized.Errors);
             branches = branches.Where(x => x.Value.Id.Value == assignedBranch).ToArray();
         }
-        else if (role == "Administrator")
-        {
-            foreach (var branch in branches)
-            {
-                var authorized = await access.CheckAsync(branch.Value.Id.Value, OperationalCapability.Inventory, "OperationalReport.Build", cancellationToken, requireOpenBranch: false);
-                if (!authorized.IsSuccess) return ApplicationResults.Failure<OperationalSummaryReport>(authorized.Errors);
-            }
-        }
+        // Administrators and auditors were validated above and read every branch; no per-branch check or audit row.
         var inventory = await inventoryRepository.ListAsync(cancellationToken);
         var moneyOrders = await moneyOrderRepository.ListAsync(cancellationToken);
         var shipments = await shipmentRepository.ListAsync(cancellationToken);

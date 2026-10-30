@@ -21,6 +21,13 @@ public sealed class MoneyOrdersController(
     MoneyOrderPolicy policy) : Controller
 {
     [HttpGet]
+    public async Task<IActionResult> Index(CancellationToken token)
+    {
+        var result = await moneyOrders.ListAsync(token);
+        return result.IsSuccess ? View(result.Value) : ApplicationResultHttp.Failure(this, result.Errors);
+    }
+
+    [HttpGet]
     public async Task<IActionResult> Create(Guid? verificationId, CancellationToken token)
     {
         var model = new MoneyOrderForm { CurrencyCode = "INR", IdentityVerificationId = verificationId, VerificationThreshold = policy.IdentityVerificationThreshold };
