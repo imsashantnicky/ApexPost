@@ -2,10 +2,12 @@ using ApexPost.Application.Reporting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ApexPost.Web.Extensions;
+using ApexPost.Web.Filters;
 
 namespace ApexPost.Web.Controllers;
 
 [Authorize(Policy = "ReportsAccess")]
+[Audited]
 public sealed class ReportsController(OperationalReportService reportService) : Controller
 {
     [HttpGet]

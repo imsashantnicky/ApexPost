@@ -123,16 +123,11 @@ public class ManagementUseCaseTests
         }
     }
 
-    private static BranchManagementUseCase NewBranchUseCase(IBranchRepository repository) => new(repository, new TestActor(), new TestAudit());
-    private static StaffManagementUseCase NewStaffUseCase(IStaffRepository repository) => new(repository, new TestActor(), new TestAudit());
+    private static BranchManagementUseCase NewBranchUseCase(IBranchRepository repository) => new(repository, new TestActor(), new InMemoryAuditStore().Trail());
+    private static StaffManagementUseCase NewStaffUseCase(IStaffRepository repository) => new(repository, new TestActor(), new InMemoryAuditStore().Trail());
     private sealed class TestActor : ApexPost.Application.Security.ICurrentActor
     {
         public ApexPost.Application.Security.ActorContext? Actor { get; } = new(Guid.NewGuid(), "Administrator", Guid.NewGuid(), "management-test");
-    }
-    private sealed class TestAudit : ApexPost.Application.Security.IAccessAuditWriter
-    {
-        public Task WriteAdministratorCrossBranchAccessAsync(ApexPost.Application.Security.ActorContext actor, Guid branchId, string operation, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task WriteOperationAsync(ApexPost.Application.Security.ActorContext? actor, Guid? branchId, string operation, string targetType, string targetReference, string outcome, IReadOnlyDictionary<string, string>? safeMetadata, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class StaffRepositoryDouble : IStaffRepository

@@ -1,3 +1,4 @@
+using ApexPost.Application.Auditing;
 using ApexPost.Application.Branches;
 using ApexPost.Application.Results;
 using ApexPost.Application.Staff;
@@ -14,12 +15,6 @@ public interface ICurrentActor
     ActorContext? Actor { get; }
 }
 
-public interface IAccessAuditWriter
-{
-    Task WriteAdministratorCrossBranchAccessAsync(ActorContext actor, Guid branchId, string operation, CancellationToken cancellationToken);
-    Task WriteOperationAsync(ActorContext? actor, Guid? branchId, string operation, string targetType, string targetReference, string outcome, IReadOnlyDictionary<string, string>? safeMetadata, CancellationToken cancellationToken);
-}
-
 public enum OperationalCapability { Inventory, Counter, BranchManager }
 
 public sealed class OperationalAccess
@@ -34,14 +29,14 @@ public sealed class OperationalAccess
     private readonly ICurrentActor currentActor;
     private readonly IStaffRepository staffRepository;
     private readonly IBranchRepository branchRepository;
-    private readonly IAccessAuditWriter auditWriter;
+    private readonly AuditTrail auditTrail;
 
-    public OperationalAccess(ICurrentActor currentActor, IStaffRepository staffRepository, IBranchRepository branchRepository, IAccessAuditWriter auditWriter)
+    public OperationalAccess(ICurrentActor currentActor, IStaffRepository staffRepository, IBranchRepository branchRepository, AuditTrail auditTrail)
     {
         this.currentActor = currentActor;
         this.staffRepository = staffRepository;
         this.branchRepository = branchRepository;
-        this.auditWriter = auditWriter;
+        this.auditTrail = auditTrail;
     }
 
     public async Task<ApplicationResult<ActorContext>> CheckAsync(Guid branchId, OperationalCapability capability, string operation, CancellationToken cancellationToken, bool requireOpenBranch = true)
@@ -83,14 +78,14 @@ public sealed class OperationalAccess
         {
             if (!canAdminister)
                 return await DeniedAsync(actor, branchId, operation, AccessDenied, "The actor is not authorized for this branch.", cancellationToken);
-            await auditWriter.WriteAdministratorCrossBranchAccessAsync(actor, branchId, operation, cancellationToken);
+            await auditTrail.RecordCrossBranchAccessAsync(actor, branchId, operation, cancellationToken);
         }
 
         return ApplicationResults.Success(actor);
     }
 
     public Task AuditAsync(string operation, string targetType, string targetReference, Guid? branchId, string outcome, IReadOnlyDictionary<string, string>? safeMetadata, CancellationToken cancellationToken) =>
-        auditWriter.WriteOperationAsync(currentActor.Actor, branchId, operation, targetType, targetReference, outcome, safeMetadata, cancellationToken);
+        auditTrail.RecordAsync(currentActor.Actor, branchId, operation, targetType, targetReference, outcome, safeMetadata, cancellationToken);
 
     public Task<ApplicationResult<ActorContext>> CheckCurrentBranchAsync(OperationalCapability capability, string operation, CancellationToken cancellationToken, bool requireOpenBranch = false)
     {
@@ -102,7 +97,7 @@ public sealed class OperationalAccess
 
     private async Task<ApplicationResult<ActorContext>> DeniedAsync(ActorContext? actor, Guid? branchId, string operation, string code, string message, CancellationToken cancellationToken)
     {
-        await auditWriter.WriteOperationAsync(actor, branchId, operation, "Authorization", operation, "Denied",
+        await auditTrail.RecordAsync(actor, branchId, operation, "Authorization", operation, "Denied",
             new Dictionary<string, string>(StringComparer.Ordinal) { ["Status"] = code }, cancellationToken);
         return Failure<ActorContext>(code, message);
     }

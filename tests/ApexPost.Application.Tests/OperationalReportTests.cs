@@ -133,7 +133,7 @@ public sealed class OperationalReportTests
             var staff = new StaffMember(EntityId.From(StaffId), EmployeeNumber.From("EMP-7777"), "Report Test Manager", EntityId.From(BranchId), [StaffRole.BranchManager]);
             CurrentActor = new CurrentActor(new ActorContext(StaffId, "BranchManager", BranchId, "report-test"));
             Staff = new StaffRepository(staff);
-            Access = new OperationalAccess(CurrentActor, Staff, Branches, new TestAuditWriter());
+            Access = new OperationalAccess(CurrentActor, Staff, Branches, new InMemoryAuditStore().Trail());
             Inventory = new InventoryRepository();
             Shipments = new ShipmentRepository();
             Transactions = new TransactionRepository();
@@ -157,11 +157,6 @@ public sealed class OperationalReportTests
     }
 
     private sealed class CurrentActor(ActorContext? actor) : ICurrentActor { public ActorContext? Actor => actor; }
-    private sealed class TestAuditWriter : IAccessAuditWriter
-    {
-        public Task WriteAdministratorCrossBranchAccessAsync(ActorContext actor, Guid branchId, string operation, CancellationToken token) => Task.CompletedTask;
-        public Task WriteOperationAsync(ActorContext? actor, Guid? branchId, string operation, string targetType, string targetReference, string outcome, IReadOnlyDictionary<string, string>? safeMetadata, CancellationToken token) => Task.CompletedTask;
-    }
 
     private sealed class BranchRepository(Branch branch) : IBranchRepository
     {

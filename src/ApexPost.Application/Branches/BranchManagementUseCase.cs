@@ -1,3 +1,4 @@
+using ApexPost.Application.Auditing;
 using ApexPost.Application.Results;
 using ApexPost.Domain.Branches;
 using ApexPost.Domain.Common;
@@ -9,13 +10,13 @@ public sealed class BranchManagementUseCase
 {
     private readonly IBranchRepository repository;
     private readonly ICurrentActor currentActor;
-    private readonly IAccessAuditWriter auditWriter;
+    private readonly AuditTrail auditTrail;
 
-    public BranchManagementUseCase(IBranchRepository repository, ICurrentActor currentActor, IAccessAuditWriter auditWriter)
+    public BranchManagementUseCase(IBranchRepository repository, ICurrentActor currentActor, AuditTrail auditTrail)
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         this.currentActor = currentActor ?? throw new ArgumentNullException(nameof(currentActor));
-        this.auditWriter = auditWriter ?? throw new ArgumentNullException(nameof(auditWriter));
+        this.auditTrail = auditTrail ?? throw new ArgumentNullException(nameof(auditTrail));
     }
 
     public async Task<ApplicationResult<BranchResponse>> CreateAsync(CreateBranchRequest request, CancellationToken cancellationToken)
@@ -96,7 +97,7 @@ public sealed class BranchManagementUseCase
     }
 
     private static BranchResponse ToResponse(Branch branch, long version) => new(branch.Id.Value, version, branch.Code.Value, branch.Name, branch.Address.Line1, branch.Address.Line2, branch.Address.City, branch.Address.PostalCode, branch.Address.CountryCode, branch.CounterCount, branch.Status);
-    private Task AuditAsync(string operation, Branch branch, string outcome, CancellationToken token) => auditWriter.WriteOperationAsync(currentActor.Actor, branch.Id.Value, operation, "Branch", branch.Id.Value.ToString("D"), outcome, new Dictionary<string, string> { ["Status"] = branch.Status.ToString(), ["CounterCount"] = branch.CounterCount.ToString(System.Globalization.CultureInfo.InvariantCulture) }, token);
+    private Task AuditAsync(string operation, Branch branch, string outcome, CancellationToken token) => auditTrail.RecordAsync(currentActor.Actor, branch.Id.Value, operation, "Branch", branch.Id.Value.ToString("D"), outcome, new Dictionary<string, string> { ["Status"] = branch.Status.ToString(), ["CounterCount"] = branch.CounterCount.ToString(System.Globalization.CultureInfo.InvariantCulture) }, token);
     private static bool TryId(Guid value, out EntityId id) { id = value == Guid.Empty ? null! : EntityId.From(value); return value != Guid.Empty; }
     private static ApplicationResult<T> InvalidRequest<T>() => ApplicationResults.Failure<T>([new("request.invalid", "The request is invalid.")]);
     private static ApplicationResult<T> InvalidId<T>(string field) => ApplicationResults.Failure<T>([new("identifier.invalid", "A valid identifier is required.", field)]);

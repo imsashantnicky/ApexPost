@@ -1,3 +1,4 @@
+using ApexPost.Application.Auditing;
 using ApexPost.Application.Inventory;
 using ApexPost.Application.Catalogue;
 using ApexPost.Application.Reporting;
@@ -22,9 +23,10 @@ public static class OperationalServiceCollectionExtensions
         services.TryAddScoped<ICurrentActor, HttpCurrentActor>();
         services.TryAddScoped<OperationalAccess>();
 
-        services.TryAddSingleton<JsonAuditWriter>(provider =>
-            new JsonAuditWriter(provider.GetRequiredService<JsonDataOptions>().DataDirectory));
-        services.TryAddSingleton<IAccessAuditWriter>(provider => provider.GetRequiredService<JsonAuditWriter>());
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IAuditStore>(provider =>
+            new JsonLinesAuditStore(provider.GetRequiredService<JsonDataOptions>().DataDirectory));
+        services.TryAddSingleton<AuditTrail>();
 
         services.TryAddSingleton<IBranchRepository, JsonBranchRepository>();
         services.TryAddSingleton<IStaffRepository, JsonStaffRepository>();
