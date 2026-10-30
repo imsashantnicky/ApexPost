@@ -128,6 +128,26 @@ public class JsonLinesAuditStoreTests : IDisposable
         Assert.Equal("monkey-1", Assert.Single(await Store().ReadAllAsync(default)).CorrelationId);
     }
 
+    [Fact]
+    public async Task AuditSampleInRepositoryRootMatchesTheStoreFormatAndPolicy()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "ApexPost.sln"))) root = root.Parent;
+        Assert.NotNull(root);
+        Directory.CreateDirectory(directory);
+        File.Copy(Path.Combine(root.FullName, "AUDIT-SAMPLE.jsonl"), AuditPath);
+
+        var entries = await Store().ReadAllAsync(default);
+
+        Assert.NotEmpty(entries);
+        Assert.All(entries, entry =>
+        {
+            Assert.True(AuditMetadataPolicy.IsValidOperationName(entry.Action), entry.Action);
+            Assert.True(AuditMetadataPolicy.IsValidCorrelationId(entry.CorrelationId), entry.CorrelationId);
+            Assert.All(entry.Metadata, item => Assert.True(AuditMetadataPolicy.IsAllowed(item.Key, item.Value), $"{item.Key}={item.Value}"));
+        });
+    }
+
     private JsonLinesAuditStore Store() => new(directory);
 
     private AuditTrail Trail() => new(Store(), new FakeTimeProvider(Now));

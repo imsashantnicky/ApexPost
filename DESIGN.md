@@ -515,7 +515,7 @@ App_Data/
 ├── shipments.json
 ├── money-orders.json
 ├── transactions.json
-├── audit.json
+├── audit.jsonl
 └── accounts.json
 ```
 
@@ -761,7 +761,7 @@ Application use cases and `OperationalAccess` write audit events through the App
 
 Sensitive mutations append a `Started` event before the business repository write and a terminal `Succeeded` or `Failed` event afterward. An audit failure before the mutation propagates and prevents the write. If the terminal audit write fails after a business file was saved, the request fails safely and the preceding `Started` event remains for reconciliation; JSON files cannot atomically commit the business record and audit record together. Audit-write exceptions are handled by the global safe error pipeline and are not swallowed by the audit filter.
 
-`JsonAuditWriter` exposes append operations only. It uses the JSON collection store's process-local lock and temporary-file replacement. Malformed audit JSON is not auto-repaired; the write fails and leaves the existing file untouched. This protects against ordinary partial writes and concurrent writes in one process, but it is not tamper resistant, does not coordinate multiple processes, and does not provide atomic multi-file business transactions. See `AUDIT-SAMPLE.json` for synthetic records.
+Callers write through `AuditTrail` (Application), which validates every metadata key and value against `AuditMetadataPolicy` and stamps entries with `TimeProvider`; persistence is the `IAuditStore` port. `JsonLinesAuditStore` implements it as an append-only JSON Lines file, `audit.jsonl`: one JSON object per line, opened only with `FileMode.Append`, with writes serialized per file by a `SemaphoreSlim`. Existing lines are never rewritten, so a damaged earlier line cannot block new entries. Structured values (operation names, correlation IDs, domain status names) are validated by format, not by keyword scan, so legitimate values such as `Transaction.StartPayment`, `PaymentPending` or the correlation ID `monkey-1` are accepted. The MVC `AuditActionFilter` audits only state-changing requests and actions marked `[Audited]`, never plain page views. This is not tamper resistant, does not coordinate multiple processes, and does not provide atomic multi-file business transactions. See `AUDIT-SAMPLE.jsonl` for synthetic records.
 
 ### 12.4 Health endpoints
 
