@@ -40,12 +40,9 @@ public sealed class JsonRetailTransactionRepository : IRetailTransactionReposito
             return (true, new PaymentStartWriteResult(ToDomain(updated), false));
         }, cancellationToken);
 
-    public async Task<bool> TryAddAsync(RetailTransaction transaction, CancellationToken cancellationToken)
-    {
-        var all = await store.ReadAllAsync(cancellationToken);
-        if (all.Values.Any(x => x.CounterReference == transaction.CounterReference && x.BranchId == transaction.BranchId.Value)) return false;
-        return await store.TryAddAsync(transaction.Id.Value.ToString("N"), ToData(transaction, 1), cancellationToken);
-    }
+    public Task<bool> TryAddAsync(RetailTransaction transaction, CancellationToken cancellationToken) =>
+        store.TryAddUniqueAsync(transaction.Id.Value.ToString("N"), ToData(transaction, 1),
+            x => x.CounterReference == transaction.CounterReference && x.BranchId == transaction.BranchId.Value, cancellationToken);
 
     public Task<bool> TryUpdateAsync(RetailTransaction transaction, long expectedVersion, CancellationToken cancellationToken) =>
         store.ExecuteAtomicAsync(items =>
