@@ -79,20 +79,6 @@ public sealed class LocalAccountService
         return accounts.ContainsKey(normalized.ToLowerInvariant());
     }
 
-    public async Task<bool> BootstrapAsync(string userName, string password, CancellationToken token)
-    {
-        await BootstrapLock.WaitAsync(token);
-        try
-        {
-            if (!IsValidUserName(userName) || password is null || password.Length < 12 || await HasAccountsAsync(token)) return false;
-            return await CreateAsync(userName, password, AdministratorRole, token);
-        }
-        finally
-        {
-            BootstrapLock.Release();
-        }
-    }
-
     public async Task<bool> BootstrapAsync(string userName, string password, Guid staffId, Guid branchId, CancellationToken token)
     {
         await BootstrapLock.WaitAsync(token);
@@ -105,19 +91,6 @@ public sealed class LocalAccountService
         {
             BootstrapLock.Release();
         }
-    }
-
-    public async Task<bool> CreateAsync(string userName, string password, string role, CancellationToken token) => await CreateAsync(userName, password, role, null, token);
-
-    public async Task<bool> CreateAsync(string userName, string password, string role, string? assignedBranchId, CancellationToken token)
-    {
-        var normalizedUserName = NormalizeUserName(userName);
-        var normalizedRole = NormalizeRole(role);
-        if (!IsValidUserName(normalizedUserName) || password is null || password.Length < 12 || !IsSupportedRole(normalizedRole)) return false;
-
-        var record = new AccountRecord(normalizedUserName, string.Empty, normalizedRole, assignedBranchId);
-        record = record with { PasswordHash = hasher.HashPassword(record, password) };
-        return await store.TryAddAsync(normalizedUserName.ToLowerInvariant(), record, token);
     }
 
     public async Task<bool> CreateAsync(string userName, string password, string role, Guid staffId, Guid branchId, CancellationToken token)

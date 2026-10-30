@@ -182,7 +182,7 @@ public sealed class OperationalReportService
         return new DailyBranchSalesReport(entries);
     }
 
-    private static IReadOnlyList<ShipmentVolumeEntry> BuildShipmentVolume(IReadOnlyList<Versioned<Shipment>> shipments) =>
+    private static ShipmentVolumeEntry[] BuildShipmentVolume(IReadOnlyList<Versioned<Shipment>> shipments) =>
         shipments
             .Where(item => !string.Equals(item.Value.ZoneCode, "UNKNOWN", StringComparison.Ordinal))
             .GroupBy(item => (item.Value.ZoneCode, item.Value.ServiceLevel))

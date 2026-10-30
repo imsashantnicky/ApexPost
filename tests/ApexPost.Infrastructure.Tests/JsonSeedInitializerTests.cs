@@ -32,12 +32,12 @@ public class JsonSeedInitializerTests : IDisposable
         var initializer = Initializer(enabled: true);
         await initializer.InitializeAsync(default);
         var before = Directory.GetFiles(directory, "*.json").Order(StringComparer.Ordinal)
-            .ToDictionary(Path.GetFileName, File.ReadAllText);
+            .ToDictionary(path => Path.GetFileName(path), File.ReadAllText);
 
         await initializer.InitializeAsync(default);
 
         foreach (var (fileName, content) in before)
-            Assert.Equal(content, await File.ReadAllTextAsync(Path.Combine(directory, fileName!)));
+            Assert.Equal(content, await File.ReadAllTextAsync(Path.Combine(directory, fileName)));
     }
 
     [Fact]

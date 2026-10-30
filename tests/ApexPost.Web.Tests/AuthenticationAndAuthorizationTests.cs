@@ -17,6 +17,7 @@ namespace ApexPost.Web.Tests;
 public class AuthenticationAndAuthorizationTests : IDisposable
 {
     private readonly string directory = Path.Combine(Path.GetTempPath(), "ApexPostWebTests", Guid.NewGuid().ToString("N"));
+    private readonly string password = NewPassword();
 
     [Fact]
     public void DashboardRequiresAuthentication()
@@ -54,10 +55,10 @@ public class AuthenticationAndAuthorizationTests : IDisposable
     public async Task InvalidCredentialsAreRejected()
     {
         var service = new LocalAccountService(new JsonDataOptions { DataDirectory = directory });
-        var created = await service.CreateAsync("adminuser", "StrongPass123!", "Administrator", default);
+        var created = await service.CreateAsync("adminuser", password, "Administrator", Guid.NewGuid(), Guid.NewGuid(), default);
 
         Assert.True(created);
-        Assert.Null(await service.ValidateAsync("adminuser", "WrongPass123!", default));
+        Assert.Null(await service.ValidateAsync("adminuser", NewPassword(), default));
     }
 
     [Theory]
@@ -71,10 +72,10 @@ public class AuthenticationAndAuthorizationTests : IDisposable
         var service = new LocalAccountService(new JsonDataOptions { DataDirectory = directory });
         var userName = $"{role.ToLowerInvariant()}user";
 
-        var created = await service.CreateAsync(userName, "StrongPass123!", role, default);
+        var created = await service.CreateAsync(userName, password, role, Guid.NewGuid(), Guid.NewGuid(), default);
 
         Assert.True(created);
-        var account = await service.ValidateAsync(userName, "StrongPass123!", default);
+        var account = await service.ValidateAsync(userName, password, default);
         Assert.NotNull(account);
         Assert.Equal(role, account!.Role);
     }
@@ -94,7 +95,7 @@ public class AuthenticationAndAuthorizationTests : IDisposable
     {
         var service = new LocalAccountService(new JsonDataOptions { DataDirectory = directory });
 
-        var created = await service.CreateAsync("badroleuser", "StrongPass123!", "SuperUser", default);
+        var created = await service.CreateAsync("badroleuser", password, "SuperUser", Guid.NewGuid(), Guid.NewGuid(), default);
 
         Assert.False(created);
     }
@@ -125,19 +126,19 @@ public class AuthenticationAndAuthorizationTests : IDisposable
             {
                 ["ApexPost:DevelopmentAccounts:Enabled"] = "true",
                 ["ApexPost:DevelopmentAccounts:Administrator:UserName"] = "admin.dev",
-                ["ApexPost:DevelopmentAccounts:Administrator:Password"] = "ChangeThis-StrongDevPass-123!",
+                ["ApexPost:DevelopmentAccounts:Administrator:Password"] = NewPassword(),
                 ["ApexPost:DevelopmentAccounts:Administrator:StaffId"] = staff[0].Id.Value.ToString("D"),
                 ["ApexPost:DevelopmentAccounts:BranchManager:UserName"] = "branch.dev",
-                ["ApexPost:DevelopmentAccounts:BranchManager:Password"] = "ChangeThis-StrongDevPass-456!",
+                ["ApexPost:DevelopmentAccounts:BranchManager:Password"] = NewPassword(),
                 ["ApexPost:DevelopmentAccounts:BranchManager:StaffId"] = staff[1].Id.Value.ToString("D"),
                 ["ApexPost:DevelopmentAccounts:CounterStaff:UserName"] = "counter.dev",
-                ["ApexPost:DevelopmentAccounts:CounterStaff:Password"] = "ChangeThis-StrongDevPass-789!",
+                ["ApexPost:DevelopmentAccounts:CounterStaff:Password"] = NewPassword(),
                 ["ApexPost:DevelopmentAccounts:CounterStaff:StaffId"] = staff[2].Id.Value.ToString("D"),
                 ["ApexPost:DevelopmentAccounts:InventoryStaff:UserName"] = "inventory.dev",
-                ["ApexPost:DevelopmentAccounts:InventoryStaff:Password"] = "ChangeThis-StrongDevPass-101!",
+                ["ApexPost:DevelopmentAccounts:InventoryStaff:Password"] = NewPassword(),
                 ["ApexPost:DevelopmentAccounts:InventoryStaff:StaffId"] = staff[3].Id.Value.ToString("D"),
                 ["ApexPost:DevelopmentAccounts:Auditor:UserName"] = "auditor.dev",
-                ["ApexPost:DevelopmentAccounts:Auditor:Password"] = "ChangeThis-StrongDevPass-202!",
+                ["ApexPost:DevelopmentAccounts:Auditor:Password"] = NewPassword(),
                 ["ApexPost:DevelopmentAccounts:Auditor:StaffId"] = staff[4].Id.Value.ToString("D")
             })
             .Build();
@@ -160,7 +161,7 @@ public class AuthenticationAndAuthorizationTests : IDisposable
             {
                 ["ApexPost:DevelopmentAccounts:Enabled"] = "true",
                 ["ApexPost:DevelopmentAccounts:Administrator:UserName"] = "prodadmin.dev",
-                ["ApexPost:DevelopmentAccounts:Administrator:Password"] = "ChangeThis-StrongDevPass-123!"
+                ["ApexPost:DevelopmentAccounts:Administrator:Password"] = NewPassword()
             })
             .Build();
 
@@ -173,14 +174,14 @@ public class AuthenticationAndAuthorizationTests : IDisposable
     public async Task PasswordsAreOnlyStoredAsHashes()
     {
         var service = new LocalAccountService(new JsonDataOptions { DataDirectory = directory });
-        await service.CreateAsync("adminuser", "StrongPass123!", "Administrator", default);
+        await service.CreateAsync("adminuser", password, "Administrator", Guid.NewGuid(), Guid.NewGuid(), default);
 
         var store = new JsonCollectionStore<AccountRecord>(directory, "accounts.json");
         var accounts = await store.ReadAllAsync(default);
         var record = Assert.Single(accounts.Values);
 
-        Assert.NotEqual("StrongPass123!", record.PasswordHash);
-        Assert.DoesNotContain("StrongPass123!", record.PasswordHash, StringComparison.Ordinal);
+        Assert.NotEqual(password, record.PasswordHash);
+        Assert.DoesNotContain(password, record.PasswordHash, StringComparison.Ordinal);
         Assert.NotEmpty(record.PasswordHash);
     }
 
@@ -201,6 +202,9 @@ public class AuthenticationAndAuthorizationTests : IDisposable
 
         GC.SuppressFinalize(this);
     }
+
+    // Generated per run so no credential-like literal lives in source.
+    private static string NewPassword() => $"Test-{Guid.NewGuid():N}!";
 
     private sealed class TestEnvironment(string environmentName) : IWebHostEnvironment
     {
