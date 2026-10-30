@@ -23,14 +23,14 @@
 
 <section class="row g-4">
     <div class="col-lg-7"><div class="card h-100"><div class="card-body"><h2 class="h4">Next actions</h2><div class="d-flex flex-wrap gap-2">
-        @if (User.IsInRole("CounterStaff") || User.IsInRole("BranchManager") || User.IsInRole("Administrator"))
+        @if (User.IsInRole(Roles.CounterStaff) || User.IsInRole(Roles.BranchManager) || User.IsInRole(Roles.Administrator))
         {
             <a class="btn btn-primary" asp-controller="Transactions" asp-action="Create">Create transaction</a>
             <a class="btn btn-outline-primary" asp-controller="Shipments" asp-action="Book">Book shipment</a>
             <a class="btn btn-outline-primary" asp-controller="MoneyOrders" asp-action="Create">Issue money order</a>
         }
-        @if (User.IsInRole("InventoryStaff") || User.IsInRole("BranchManager") || User.IsInRole("Administrator")) { <a class="btn btn-outline-primary" asp-controller="Inventory" asp-action="Index">Review inventory</a> }
-        @if (User.IsInRole("Auditor") || User.IsInRole("BranchManager") || User.IsInRole("Administrator")) { <a class="btn btn-outline-primary" asp-controller="Reports" asp-action="Index">View reports</a> }
+        @if (User.IsInRole(Roles.InventoryStaff) || User.IsInRole(Roles.BranchManager) || User.IsInRole(Roles.Administrator)) { <a class="btn btn-outline-primary" asp-controller="Inventory" asp-action="Index">Review inventory</a> }
+        @if (User.IsInRole(Roles.Auditor) || User.IsInRole(Roles.BranchManager) || User.IsInRole(Roles.Administrator)) { <a class="btn btn-outline-primary" asp-controller="Reports" asp-action="Index">View reports</a> }
     </div>
     @if (Model.LowStockCount is int low && low > 0) { <div class="alert alert-warning mt-4 mb-0"><strong>Low stock:</strong> @low inventory items need review. <a asp-controller="Inventory" asp-action="Index">Open inventory</a>.</div> }
     @if (Model.PendingShipmentCount is int pending && pending > 0) { <div class="alert alert-info mt-3 mb-0"><strong>Shipment tasks:</strong> @pending shipments are booked, accepted, or in transit.</div> }

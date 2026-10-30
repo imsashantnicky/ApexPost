@@ -1,3 +1,4 @@
+using ApexPost.Web.Services;
 using System.ComponentModel.DataAnnotations;
 using ApexPost.Application.Branches;
 using ApexPost.Application.Catalogue;
@@ -9,7 +10,7 @@ using ApexPost.Domain.Payments;
 
 namespace ApexPost.Web.Models;
 
-public sealed class TransactionCreateForm
+public sealed class TransactionCreateForm : IBranchSelectionForm
 {
     [Required] public Guid BranchId { get; set; }
     [Required, StringLength(40)] public string CounterReference { get; set; } = "";
@@ -50,7 +51,7 @@ public sealed class ShipmentPreviewForm : ShipmentForm
     public string ServiceName { get; set; } = "";
 }
 
-public sealed class MoneyOrderForm
+public sealed class MoneyOrderForm : IBranchSelectionForm
 {
     [Required, StringLength(30)] public string OrderNumber { get; set; } = "";
     [Range(typeof(decimal), "0.01", "999999999")] public decimal Amount { get; set; }
@@ -63,7 +64,7 @@ public sealed class MoneyOrderForm
     public decimal VerificationThreshold { get; set; }
 }
 
-public sealed class IdentityVerificationStartForm
+public sealed class IdentityVerificationStartForm : IBranchSelectionForm
 {
     [Required] public Guid BranchId { get; set; }
     [Required] public Guid SubjectId { get; set; }

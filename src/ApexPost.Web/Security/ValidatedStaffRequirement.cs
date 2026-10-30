@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ApexPost.Application.Security;
 using ApexPost.Application.Staff;
 using ApexPost.Domain.Common;
 using ApexPost.Domain.Staff;
@@ -15,20 +16,12 @@ public sealed class ValidatedStaffHandler(IStaffRepository staffRepository, IHtt
     {
         var staffClaim = context.User.FindFirstValue(ActorClaimTypes.StaffId);
         var branchClaim = context.User.FindFirstValue(ActorClaimTypes.AssignedBranchId);
-        var role = LocalAccountService.NormalizeRole(context.User.FindFirstValue(ClaimTypes.Role));
+        var role = context.User.FindFirstValue(ClaimTypes.Role);
         if (!Guid.TryParse(staffClaim, out var staffId) || staffId == Guid.Empty || !Guid.TryParse(branchClaim, out var branchId) || branchId == Guid.Empty) return;
 
         var staff = await staffRepository.GetByIdAsync(EntityId.From(staffId), contextAccessor.HttpContext?.RequestAborted ?? CancellationToken.None);
         if (staff is null || staff.Value.Status != EmploymentStatus.Active || staff.Value.BranchId.Value != branchId) return;
 
-        var roleMatches = role switch
-        {
-            LocalAccountService.AdministratorRole or LocalAccountService.AuditorRole => true,
-            LocalAccountService.BranchManagerRole => staff.Value.Roles.Contains(StaffRole.BranchManager),
-            LocalAccountService.CounterStaffRole => staff.Value.Roles.Contains(StaffRole.CounterClerk),
-            LocalAccountService.InventoryStaffRole => staff.Value.Roles.Contains(StaffRole.InventoryClerk),
-            _ => false
-        };
-        if (roleMatches) context.Succeed(requirement);
+        if (StaffRoleMapping.MatchesStaff(role, staff.Value.Roles)) context.Succeed(requirement);
     }
 }

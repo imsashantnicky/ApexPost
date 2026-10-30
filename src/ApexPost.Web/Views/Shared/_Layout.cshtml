@@ -1,11 +1,12 @@
 @using Microsoft.AspNetCore.Authorization
+@using ApexPost.Web.Security
 @inject IAuthorizationService AuthorizationService
 @{
     var authenticated = User.Identity?.IsAuthenticated == true;
-    var canAdminister = authenticated && (await AuthorizationService.AuthorizeAsync(User, "AdministratorOnly")).Succeeded;
-    var canUseInventory = authenticated && (await AuthorizationService.AuthorizeAsync(User, "InventoryOperations")).Succeeded;
-    var canUseCounter = authenticated && (await AuthorizationService.AuthorizeAsync(User, "CounterOperations")).Succeeded;
-    var canReadReports = authenticated && (await AuthorizationService.AuthorizeAsync(User, "ReportsAccess")).Succeeded;
+    var canAdminister = authenticated && (await AuthorizationService.AuthorizeAsync(User, Policies.AdministratorOnly)).Succeeded;
+    var canUseInventory = authenticated && (await AuthorizationService.AuthorizeAsync(User, Policies.InventoryOperations)).Succeeded;
+    var canUseCounter = authenticated && (await AuthorizationService.AuthorizeAsync(User, Policies.CounterOperations)).Succeeded;
+    var canReadReports = authenticated && (await AuthorizationService.AuthorizeAsync(User, Policies.ReportsAccess)).Succeeded;
 }
 <!DOCTYPE html>
 <head>

@@ -64,20 +64,12 @@ public sealed class OperationalReportService
         if (staff.Value.Status != EmploymentStatus.Active || staff.Value.BranchId.Value != assignedBranch)
             return Failure("actor.inactive", "The authenticated staff actor is unavailable.");
 
-        var role = actor.Role switch { "OperationsManager" => "BranchManager", "CounterClerk" => "CounterStaff", "InventoryClerk" => "InventoryStaff", _ => actor.Role };
-        var roleMatches = role switch
-        {
-            "Administrator" or "Auditor" => true,
-            "BranchManager" => staff.Value.Roles.Contains(StaffRole.BranchManager),
-            "InventoryStaff" => staff.Value.Roles.Contains(StaffRole.InventoryClerk),
-            "CounterStaff" => staff.Value.Roles.Contains(StaffRole.CounterClerk),
-            _ => false
-        };
-        if (!roleMatches || role is not ("Administrator" or "Auditor" or "BranchManager"))
+        if (!StaffRoleMapping.MatchesStaff(actor.Role, staff.Value.Roles) || !StaffRoleMapping.CanReadReports(actor.Role))
             return Failure("access.denied", "The actor is not authorized to view operational reports.");
 
+        var branchScoped = StaffRoleMapping.Normalize(actor.Role) == Roles.BranchManager;
         var branches = await branchRepository.ListAsync(cancellationToken);
-        if (role == "BranchManager")
+        if (branchScoped)
         {
             var authorized = await access.CheckAsync(assignedBranch, OperationalCapability.Inventory, "OperationalReport.Build", cancellationToken, requireOpenBranch: false);
             if (!authorized.IsSuccess) return ApplicationResults.Failure<OperationalSummaryReport>(authorized.Errors);
@@ -90,7 +82,7 @@ public sealed class OperationalReportService
         var transactions = await transactionRepository.ListAsync(cancellationToken);
         var verifications = await verificationRepository.ListAsync(cancellationToken);
 
-        if (role == "BranchManager")
+        if (branchScoped)
         {
             inventory = inventory.Where(x => x.Value.BranchId.Value == assignedBranch).ToArray();
             moneyOrders = moneyOrders.Where(x => x.Value.OriginatingBranchId.Value == assignedBranch).ToArray();

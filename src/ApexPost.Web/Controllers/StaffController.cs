@@ -1,3 +1,4 @@
+using ApexPost.Web.Security;
 using ApexPost.Application.Staff;
 using ApexPost.Application.Branches;
 using ApexPost.Domain.Branches;
@@ -7,7 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApexPost.Web.Controllers;
-[Authorize(Policy = "AdministratorOnly")]
+[Authorize(Policy = Policies.AdministratorOnly)]
 public sealed class StaffController(StaffManagementUseCase useCase, IBranchRepository branches) : Controller
 {
     public async Task<IActionResult> Index(CancellationToken token) { var staff = await useCase.ListAsync(token); var names = (await branches.ListAsync(token)).ToDictionary(item => item.Value.Id.Value, item => item.Value.Name); return View(staff.Select(item => new StaffIndexRow(item, names.GetValueOrDefault(item.BranchId, "Unavailable branch"))).ToArray()); }

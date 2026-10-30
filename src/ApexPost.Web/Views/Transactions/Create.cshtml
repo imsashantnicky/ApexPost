@@ -3,7 +3,7 @@
 <div class="page-heading"><div><p class="eyebrow">Counter</p><h1>New transaction</h1><p class="text-secondary">Create a basket for one branch. Branch scope is checked again by the Application service.</p></div></div>
 <div class="card form-card"><div class="card-body"><form asp-action="Create" method="post">
     <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
-    @if (User.IsInRole("Administrator"))
+    @if (User.IsInRole(Roles.Administrator))
     {
         <div class="mb-3"><label asp-for="BranchId" class="form-label">Branch</label><select asp-for="BranchId" class="form-select"><option value="">Choose branch</option>@foreach (var branch in Model.Branches) { <option value="@branch.Id">@branch.Name</option> }</select><span asp-validation-for="BranchId" class="text-danger"></span></div>
     }

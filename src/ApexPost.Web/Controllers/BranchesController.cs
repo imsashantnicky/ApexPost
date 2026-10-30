@@ -1,10 +1,11 @@
+using ApexPost.Web.Security;
 using ApexPost.Application.Branches;
 using ApexPost.Web.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApexPost.Web.Controllers;
-[Authorize(Policy = "AdministratorOnly")]
+[Authorize(Policy = Policies.AdministratorOnly)]
 public sealed class BranchesController(BranchManagementUseCase useCase) : Controller
 {
     public async Task<IActionResult> Index(CancellationToken token) => View(await useCase.ListAsync(token));

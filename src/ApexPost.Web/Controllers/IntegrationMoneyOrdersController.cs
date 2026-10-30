@@ -1,3 +1,4 @@
+using ApexPost.Web.Security;
 using ApexPost.Application.MoneyOrders;
 using ApexPost.Web.Extensions;
 using ApexPost.Web.Middleware;
@@ -10,7 +11,7 @@ namespace ApexPost.Web.Controllers;
 
 [ApiController]
 [Route("api/integrations/money-orders")]
-[Authorize(Policy = "IntegrationCounter", AuthenticationSchemes = IntegrationApiKeyDefaults.Scheme)]
+[Authorize(Policy = Policies.IntegrationCounter, AuthenticationSchemes = IntegrationApiKeyDefaults.Scheme)]
 [EnableRateLimiting("partner")]
 [IntegrationIpRestricted]
 [IgnoreAntiforgeryToken]

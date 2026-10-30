@@ -104,21 +104,10 @@ public sealed class OperationalAccess
         if (staff.Value.Status != EmploymentStatus.Active || staff.Value.BranchId.Value != actor.AssignedBranchId)
             return new(await DeniedAsync(actor, branchId, operation, ActorInactive, "The authenticated staff actor is unavailable.", cancellationToken));
 
-        var role = LocalRole(actor.Role);
-        if (!RoleMatchesStaff(role, staff.Value.Roles))
+        if (!StaffRoleMapping.MatchesStaff(actor.Role, staff.Value.Roles) || !StaffRoleMapping.Allows(actor.Role, capability))
             return new(await DeniedAsync(actor, branchId, operation, AccessDenied, "The actor is not authorized for this operation.", cancellationToken));
 
-        var permittedRole = capability switch
-        {
-            OperationalCapability.Inventory => role is "Administrator" or "BranchManager" or "InventoryStaff",
-            OperationalCapability.Counter => role is "Administrator" or "BranchManager" or "CounterStaff",
-            OperationalCapability.BranchManager => role is "Administrator" or "BranchManager",
-            _ => false
-        };
-        if (!permittedRole || role == "Auditor")
-            return new(await DeniedAsync(actor, branchId, operation, AccessDenied, "The actor is not authorized for this operation.", cancellationToken));
-
-        return new(null, staff.Value.BranchId.Value, role == "Administrator");
+        return new(null, staff.Value.BranchId.Value, StaffRoleMapping.IsAdministrator(actor.Role));
     }
 
     private readonly record struct ActorAuthorization(ApplicationResult<ActorContext>? Failure, Guid StaffBranchId = default, bool CanAdminister = false);
@@ -129,23 +118,6 @@ public sealed class OperationalAccess
             new Dictionary<string, string>(StringComparer.Ordinal) { ["Status"] = code }, cancellationToken);
         return Failure<ActorContext>(code, message);
     }
-
-    private static bool RoleMatchesStaff(string role, IReadOnlyCollection<StaffRole> staffRoles) => role switch
-    {
-        "Administrator" => true,
-        "BranchManager" => staffRoles.Contains(StaffRole.BranchManager),
-        "CounterStaff" => staffRoles.Contains(StaffRole.CounterClerk),
-        "InventoryStaff" => staffRoles.Contains(StaffRole.InventoryClerk),
-        _ => false
-    };
-
-    private static string LocalRole(string role) => role switch
-    {
-        "OperationsManager" => "BranchManager",
-        "CounterClerk" => "CounterStaff",
-        "InventoryClerk" => "InventoryStaff",
-        _ => role
-    };
 
     private static ApplicationResult<T> Failure<T>(string code, string message) => ApplicationResults.Failure<T>([new(code, message)]);
 }

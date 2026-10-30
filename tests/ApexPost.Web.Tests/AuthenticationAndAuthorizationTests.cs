@@ -1,4 +1,5 @@
 using ApexPost.Application.Persistence;
+using ApexPost.Application.Security;
 using ApexPost.Application.Staff;
 using ApexPost.Domain.Common;
 using ApexPost.Domain.Staff;
@@ -62,11 +63,11 @@ public class AuthenticationAndAuthorizationTests : IDisposable
     }
 
     [Theory]
-    [InlineData(LocalAccountService.AdministratorRole)]
-    [InlineData(LocalAccountService.BranchManagerRole)]
-    [InlineData(LocalAccountService.CounterStaffRole)]
-    [InlineData(LocalAccountService.InventoryStaffRole)]
-    [InlineData(LocalAccountService.AuditorRole)]
+    [InlineData(Roles.Administrator)]
+    [InlineData(Roles.BranchManager)]
+    [InlineData(Roles.CounterStaff)]
+    [InlineData(Roles.InventoryStaff)]
+    [InlineData(Roles.Auditor)]
     public async Task EachSupportedRoleCanBeCreatedAndValidated(string role)
     {
         var service = new LocalAccountService(new JsonDataOptions { DataDirectory = directory });
@@ -81,13 +82,13 @@ public class AuthenticationAndAuthorizationTests : IDisposable
     }
 
     [Theory]
-    [InlineData("CounterClerk", LocalAccountService.CounterStaffRole)]
-    [InlineData("InventoryClerk", LocalAccountService.InventoryStaffRole)]
-    [InlineData("OperationsManager", LocalAccountService.BranchManagerRole)]
+    [InlineData("CounterClerk", Roles.CounterStaff)]
+    [InlineData("InventoryClerk", Roles.InventoryStaff)]
+    [InlineData("OperationsManager", Roles.BranchManager)]
     public void LegacyRoleNamesNormalizeToCurrentSupportedRoles(string legacy, string expected)
     {
-        Assert.Equal(expected, LocalAccountService.NormalizeRole(legacy));
-        Assert.True(LocalAccountService.IsSupportedRole(legacy));
+        Assert.Equal(expected, StaffRoleMapping.Normalize(legacy));
+        Assert.True(StaffRoleMapping.IsSupported(legacy));
     }
 
     [Fact]
@@ -103,12 +104,12 @@ public class AuthenticationAndAuthorizationTests : IDisposable
     [Fact]
     public void AuditorRoleIsReadOnlyAndDashboardRoutingMatchesRole()
     {
-        Assert.True(LocalAccountService.IsReadOnlyRole(LocalAccountService.AuditorRole));
-        Assert.Equal("Auditor", LocalAccountService.GetDashboardAction(LocalAccountService.AuditorRole));
-        Assert.Equal("Admin", LocalAccountService.GetDashboardAction(LocalAccountService.AdministratorRole));
-        Assert.Equal("Branch", LocalAccountService.GetDashboardAction(LocalAccountService.BranchManagerRole));
-        Assert.Equal("Counter", LocalAccountService.GetDashboardAction(LocalAccountService.CounterStaffRole));
-        Assert.Equal("Inventory", LocalAccountService.GetDashboardAction(LocalAccountService.InventoryStaffRole));
+        Assert.True(StaffRoleMapping.IsReadOnly(Roles.Auditor));
+        Assert.Equal("Auditor", LocalAccountService.GetDashboardAction(Roles.Auditor));
+        Assert.Equal("Admin", LocalAccountService.GetDashboardAction(Roles.Administrator));
+        Assert.Equal("Branch", LocalAccountService.GetDashboardAction(Roles.BranchManager));
+        Assert.Equal("Counter", LocalAccountService.GetDashboardAction(Roles.CounterStaff));
+        Assert.Equal("Inventory", LocalAccountService.GetDashboardAction(Roles.InventoryStaff));
     }
 
     [Fact]

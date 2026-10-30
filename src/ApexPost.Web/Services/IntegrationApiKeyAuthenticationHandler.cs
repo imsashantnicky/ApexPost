@@ -1,3 +1,4 @@
+using ApexPost.Application.Security;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -48,7 +49,7 @@ public sealed class IntegrationApiKeyAuthenticationHandler(
         {
             new Claim(ClaimTypes.NameIdentifier, staff.Value.Id.Value.ToString("D")),
             new Claim(ClaimTypes.Name, "ApexPost integration counter"),
-            new Claim(ClaimTypes.Role, LocalAccountService.CounterStaffRole),
+            new Claim(ClaimTypes.Role, Roles.CounterStaff),
             new Claim(ActorClaimTypes.StaffId, staff.Value.Id.Value.ToString("D")),
             new Claim(ActorClaimTypes.AssignedBranchId, staff.Value.BranchId.Value.ToString("D"))
         };

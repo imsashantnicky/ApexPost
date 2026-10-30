@@ -1,3 +1,4 @@
+using ApexPost.Web.Security;
 using ApexPost.Application.Reporting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -6,7 +7,7 @@ using ApexPost.Web.Filters;
 
 namespace ApexPost.Web.Controllers;
 
-[Authorize(Policy = "ReportsAccess")]
+[Authorize(Policy = Policies.ReportsAccess)]
 [Audited]
 public sealed class ReportsController(OperationalReportService reportService) : Controller
 {

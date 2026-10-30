@@ -46,6 +46,7 @@ public static class OperationalServiceCollectionExtensions
         services.TryAddSingleton<IShippingRateLookup, JsonShippingRateLookup>();
 
         services.TryAddSingleton<LocalAccountService>();
+        services.TryAddScoped<BranchSelectionService>();
         services.TryAddTransient<BranchManagementUseCase>();
         services.TryAddTransient<StaffManagementUseCase>();
         services.TryAddTransient<CatalogueManagementUseCase>();

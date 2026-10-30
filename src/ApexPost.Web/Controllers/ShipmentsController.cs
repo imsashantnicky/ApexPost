@@ -1,25 +1,22 @@
-using ApexPost.Application.Branches;
+using ApexPost.Web.Security;
 using ApexPost.Application.Catalogue;
-using ApexPost.Application.Security;
 using ApexPost.Application.Shipping;
 using ApexPost.Application.Transactions;
-using ApexPost.Domain.Branches;
 using ApexPost.Domain.Catalogue;
-using ApexPost.Domain.Common;
 using ApexPost.Web.Extensions;
 using ApexPost.Web.Models;
+using ApexPost.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApexPost.Web.Controllers;
 
-[Authorize(Policy = "CounterOperations")]
+[Authorize(Policy = Policies.CounterOperations)]
 public sealed class ShipmentsController(
     ShipmentOperationsUseCase useCase,
-    IBranchRepository branches,
+    BranchSelectionService branchSelection,
     CatalogueManagementUseCase catalogue,
-    IShippingRateLookup rates,
-    ICurrentActor currentActor) : Controller
+    IShippingRateLookup rates) : Controller
 {
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken token)
@@ -34,7 +31,7 @@ public sealed class ShipmentsController(
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Preview(ShipmentForm model, CancellationToken token)
     {
-        ApplyActorBranch(model);
+        branchSelection.ApplyActorBranch(model);
         await PopulateAsync(model, token);
         if (!ModelState.IsValid || model.BranchId == Guid.Empty || !model.Services.Any(service => service.Id == model.ServiceId && service.Availability == ServiceAvailability.Available))
         {
@@ -64,7 +61,7 @@ public sealed class ShipmentsController(
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Book(ShipmentForm model, CancellationToken token)
     {
-        ApplyActorBranch(model);
+        branchSelection.ApplyActorBranch(model);
         if (!ModelState.IsValid || model.BranchId == Guid.Empty)
         {
             await PopulateAsync(model, token);
@@ -109,24 +106,9 @@ public sealed class ShipmentsController(
         return RedirectToAction(nameof(Index));
     }
 
-    private void ApplyActorBranch(ShipmentForm model)
-    {
-        if (currentActor.Actor?.Role != "Administrator" && currentActor.Actor?.AssignedBranchId is Guid assignedBranch)
-            model.BranchId = assignedBranch;
-    }
-
     private async Task<ShipmentForm> PopulateAsync(ShipmentForm model, CancellationToken token)
     {
-        if (currentActor.Actor?.Role == "Administrator")
-            model.Branches = (await branches.ListAsync(token)).Where(item => item.Value.Status == BranchStatus.Active)
-                .Select(item => new BranchOption(item.Value.Id.Value, item.Value.Name)).OrderBy(item => item.Name).ToArray();
-        else if (currentActor.Actor?.AssignedBranchId is Guid branchId)
-        {
-            var branch = await branches.GetByIdAsync(EntityId.From(branchId), token);
-            model.Branches = branch is not null && branch.Value.Status == BranchStatus.Active
-                ? [new BranchOption(branch.Value.Id.Value, branch.Value.Name)] : [];
-            model.BranchId = branchId;
-        }
+        await branchSelection.PopulateAsync(model, token);
         model.Services = (await catalogue.ListAsync(token)).Where(service => service.Availability == ServiceAvailability.Available).ToArray();
         if (model.ServiceId != Guid.Empty)
         {
