@@ -48,15 +48,27 @@ public sealed class PaymentRecord
         ChangeStatus(PaymentStatus.Confirmed, "Only a pending payment can be confirmed.");
     }
 
-    internal void Decline(string reason)
+    /// <summary>Restores a persisted payment with its original identity, status and reasons.</summary>
+    internal static PaymentRecord Restore(EntityId transactionId, PaymentState state)
     {
-        var normalizedReason = reason?.Trim();
+        var payment = new PaymentRecord(
+            state.Id ?? throw new DomainException("Payment identity is required."),
+            transactionId, state.Amount, state.CurrencyCode, state.Method, state.Reference);
 
-        if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length > 250)
+        if (!Enum.IsDefined(state.Status))
         {
-            throw new DomainException("Payment decline reason is required and must not exceed 250 characters.");
+            throw new DomainException("Payment status must be recognized.");
         }
 
+        payment.Status = state.Status;
+        payment.DeclineReason = state.Status == PaymentStatus.Declined ? RequiredDeclineReason(state.DeclineReason) : null;
+        payment.ReversalReason = state.Status == PaymentStatus.Reversed ? RequiredReversalReason(state.ReversalReason) : null;
+        return payment;
+    }
+
+    internal void Decline(string reason)
+    {
+        var normalizedReason = RequiredDeclineReason(reason);
         ChangeStatus(PaymentStatus.Declined, "Only a pending payment can be declined.");
         DeclineReason = normalizedReason;
     }
@@ -73,10 +85,19 @@ public sealed class PaymentRecord
             throw new DomainException("Only a confirmed payment can be reversed.");
         }
 
-        var normalized = reason?.Trim();
-        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 250) throw new DomainException("Refund reason is required and must not exceed 250 characters.");
-        ReversalReason = normalized;
+        ReversalReason = RequiredReversalReason(reason);
         Status = PaymentStatus.Reversed;
+    }
+
+    private static string RequiredDeclineReason(string? reason) => RequiredReason(reason, "Payment decline reason");
+
+    private static string RequiredReversalReason(string? reason) => RequiredReason(reason, "Refund reason");
+
+    private static string RequiredReason(string? reason, string field)
+    {
+        var normalized = reason?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 250) throw new DomainException($"{field} is required and must not exceed 250 characters.");
+        return normalized;
     }
 
     private void ChangeStatus(PaymentStatus targetStatus, string errorMessage)

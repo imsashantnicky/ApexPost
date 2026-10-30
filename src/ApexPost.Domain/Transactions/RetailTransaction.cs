@@ -18,6 +18,52 @@ public sealed class RetailTransaction
         Status = TransactionStatus.Open;
     }
 
+    /// <summary>
+    /// Restores a persisted transaction exactly as stored: line and payment identities, payment statuses,
+    /// transaction status and void reason are taken from the snapshot rather than replayed through
+    /// <see cref="StartPayment"/>, so a basket edited after a declined payment reloads correctly.
+    /// The snapshot is validated as a whole and rejected when its parts are inconsistent.
+    /// </summary>
+    public static RetailTransaction Restore(
+        EntityId id,
+        EntityId branchId,
+        string counterReference,
+        string currencyCode,
+        DateTimeOffset? createdAtUtc,
+        TransactionStatus status,
+        string? voidReason,
+        IEnumerable<TransactionLineState> lines,
+        IEnumerable<PaymentState> payments)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        ArgumentNullException.ThrowIfNull(payments);
+        if (!Enum.IsDefined(status)) throw new DomainException("Transaction status must be recognized.");
+
+        var transaction = new RetailTransaction(id, branchId, counterReference, currencyCode, createdAtUtc);
+        foreach (var line in lines)
+        {
+            var lineId = line?.Id ?? throw new DomainException("Transaction line identity is required.");
+            if (transaction.lineItems.Any(existing => existing.Id == lineId)) throw new DomainException("Transaction line identities must be unique.");
+            transaction.lineItems.Add(new TransactionLineItem(lineId, line.ServiceId ?? throw new DomainException("Service identity is required."),
+                line.Description, line.Quantity, line.UnitPrice, line.Kind));
+        }
+
+        foreach (var payment in payments)
+        {
+            ArgumentNullException.ThrowIfNull(payment);
+            if (transaction.payments.Any(existing => existing.Id == payment.Id)) throw new DomainException("Payment identities must be unique.");
+            var record = PaymentRecord.Restore(transaction.Id, payment);
+            if (record.CurrencyCode != transaction.CurrencyCode) throw new DomainException("Payment currency must match the transaction currency.");
+            transaction.payments.Add(record);
+        }
+
+        transaction.Status = status;
+        if (status == TransactionStatus.Cancelled) transaction.VoidReason = RequiredReason(voidReason, "Void reason");
+        else if (voidReason is not null) throw new DomainException("Only a cancelled transaction can have a void reason.");
+        transaction.EnsureRestoredStateIsConsistent();
+        return transaction;
+    }
+
     public EntityId Id { get; }
 
     public EntityId BranchId { get; }
@@ -137,6 +183,36 @@ public sealed class RetailTransaction
         return payments.Single(payment => payment.Status == PaymentStatus.Pending);
     }
 
+    private void EnsureRestoredStateIsConsistent()
+    {
+        var pending = payments.Count(payment => payment.Status == PaymentStatus.Pending);
+        var confirmed = payments.Count(payment => payment.Status == PaymentStatus.Confirmed);
+        var reversed = payments.Count(payment => payment.Status == PaymentStatus.Reversed);
+        var cancelled = payments.Count(payment => payment.Status == PaymentStatus.Cancelled);
+
+        // Declined attempts may appear in any status; each status allows exactly the active payment it implies.
+        var consistent = Status switch
+        {
+            TransactionStatus.Open => pending == 0 && confirmed == 0 && reversed == 0 && cancelled == 0,
+            TransactionStatus.PaymentPending => pending == 1 && confirmed == 0 && reversed == 0 && cancelled == 0,
+            TransactionStatus.Paid => pending == 0 && confirmed == 1 && reversed == 0 && cancelled == 0,
+            TransactionStatus.Reversed => pending == 0 && confirmed == 0 && reversed == 1 && cancelled == 0,
+            TransactionStatus.Cancelled => pending == 0 && confirmed == 0 && reversed == 0 && cancelled <= 1,
+            _ => false
+        };
+        if (!consistent)
+        {
+            throw new DomainException("Persisted payments are inconsistent with the transaction status.");
+        }
+
+        // Lines cannot change once payment has started, so the active (or cancelled) attempt must match the basket.
+        var active = payments.SingleOrDefault(payment => payment.Status is PaymentStatus.Pending or PaymentStatus.Confirmed or PaymentStatus.Reversed or PaymentStatus.Cancelled);
+        if (active is not null && (lineItems.Count == 0 || active.Amount != Total))
+        {
+            throw new DomainException("Payment amount must equal the transaction total.");
+        }
+    }
+
     private void EnsureOpen()
     {
         if (Status != TransactionStatus.Open)
@@ -157,7 +233,7 @@ public sealed class RetailTransaction
         return normalizedReference;
     }
 
-    private static string RequiredReason(string reason, string field)
+    private static string RequiredReason(string? reason, string field)
     {
         var normalized = reason?.Trim();
         if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 250) throw new DomainException($"{field} is required and must not exceed 250 characters.");
