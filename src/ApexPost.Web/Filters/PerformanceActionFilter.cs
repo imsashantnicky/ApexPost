@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace ApexPost.Web.Filters;
@@ -6,7 +5,8 @@ namespace ApexPost.Web.Filters;
 /// <summary>Logs slow MVC actions without logging request payloads or query-string values.</summary>
 public sealed partial class PerformanceActionFilter(
     IConfiguration configuration,
-    ILogger<PerformanceActionFilter> logger) : IAsyncActionFilter
+    ILogger<PerformanceActionFilter> logger,
+    TimeProvider timeProvider) : IAsyncActionFilter
 {
     private readonly int thresholdMilliseconds = Math.Clamp(
         configuration.GetValue<int?>("ApexPost:Diagnostics:SlowActionThresholdMilliseconds") ?? 500,
@@ -17,21 +17,21 @@ public sealed partial class PerformanceActionFilter(
         ActionExecutingContext context,
         ActionExecutionDelegate next)
     {
-        var stopwatch = Stopwatch.StartNew();
+        var started = timeProvider.GetTimestamp();
         try
         {
             await next();
         }
         finally
         {
-            stopwatch.Stop();
+            var elapsedMilliseconds = (long)timeProvider.GetElapsedTime(started).TotalMilliseconds;
 
-            if (stopwatch.ElapsedMilliseconds >= thresholdMilliseconds)
+            if (elapsedMilliseconds >= thresholdMilliseconds)
             {
                 LogSlowAction(logger,
                     context.RouteData.Values["controller"]?.ToString() ?? "Unknown",
                     context.RouteData.Values["action"]?.ToString() ?? "Unknown",
-                    stopwatch.ElapsedMilliseconds,
+                    elapsedMilliseconds,
                     context.HttpContext.TraceIdentifier);
             }
         }

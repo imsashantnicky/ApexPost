@@ -96,14 +96,15 @@ public sealed class ActionFilterTests
         actionContext.RouteData.Values["action"] = "Book";
         var filters = new List<IFilterMetadata>();
         var executing = new ActionExecutingContext(actionContext, filters, new Dictionary<string, object?>(), new object());
-        var filter = new PerformanceActionFilter(configuration, factory.CreateLogger<PerformanceActionFilter>());
+        var time = new FakeTimeProvider();
+        var filter = new PerformanceActionFilter(configuration, factory.CreateLogger<PerformanceActionFilter>(), time);
         var called = false;
 
-        await filter.OnActionExecutionAsync(executing, async () =>
+        await filter.OnActionExecutionAsync(executing, () =>
         {
             called = true;
-            await Task.Delay(10);
-            return new ActionExecutedContext(actionContext, filters, executing.Controller);
+            time.Advance(TimeSpan.FromMilliseconds(10));
+            return Task.FromResult(new ActionExecutedContext(actionContext, filters, executing.Controller));
         });
 
         Assert.True(called);

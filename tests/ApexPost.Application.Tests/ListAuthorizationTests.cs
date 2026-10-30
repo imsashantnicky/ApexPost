@@ -80,7 +80,7 @@ public sealed class ListAuthorizationTests
             case "Transactions":
             {
                 var transactions = new Transactions();
-                var result = await new TransactionOperationsUseCase(transactions, new NoPrices(), transactions, access).ListAsync(default);
+                var result = await new TransactionOperationsUseCase(transactions, new NoPrices(), transactions, access, TestClock.Create()).ListAsync(default);
                 return (result.IsSuccess, result.IsSuccess ? result.Value.Select(item => item.BranchId).ToArray() : []);
             }
             case "Shipments":

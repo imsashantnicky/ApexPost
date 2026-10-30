@@ -20,9 +20,9 @@ public class OperationalUseCaseTests
         var useCase = new InventoryOperationsUseCase(repository, OperationalAccessFixture.Create());
         var itemId = repository.ItemId;
 
-        var received = await useCase.ReceiveAsync(new(itemId, 1, 10, "Supplier delivery", DateTimeOffset.UtcNow), default);
-        var issued = await useCase.IssueAsync(new(itemId, 2, 4, "Counter sale", DateTimeOffset.UtcNow), default);
-        var adjusted = await useCase.AdjustToAsync(new(itemId, 3, 8, "Stock count", DateTimeOffset.UtcNow), default);
+        var received = await useCase.ReceiveAsync(new(itemId, 1, 10, "Supplier delivery", TestClock.Now), default);
+        var issued = await useCase.IssueAsync(new(itemId, 2, 4, "Counter sale", TestClock.Now), default);
+        var adjusted = await useCase.AdjustToAsync(new(itemId, 3, 8, "Stock count", TestClock.Now), default);
 
         Assert.Equal(10, received.Value.QuantityOnHand);
         Assert.Equal(6, issued.Value.QuantityOnHand);
@@ -35,8 +35,8 @@ public class OperationalUseCaseTests
         var repository = new InventoryRepositoryDouble(Item());
         var useCase = new InventoryOperationsUseCase(repository, OperationalAccessFixture.Create());
 
-        var stale = await useCase.ReceiveAsync(new(repository.ItemId, 2, 1, "Delivery", DateTimeOffset.UtcNow), default);
-        var missing = await useCase.ReceiveAsync(new(Guid.NewGuid(), 1, 1, "Delivery", DateTimeOffset.UtcNow), default);
+        var stale = await useCase.ReceiveAsync(new(repository.ItemId, 2, 1, "Delivery", TestClock.Now), default);
+        var missing = await useCase.ReceiveAsync(new(Guid.NewGuid(), 1, 1, "Delivery", TestClock.Now), default);
 
         Assert.Equal("concurrency.conflict", Assert.Single(stale.Errors).Code);
         Assert.Equal("resource.not-found", Assert.Single(missing.Errors).Code);
@@ -47,7 +47,7 @@ public class OperationalUseCaseTests
     {
         var repository = new InventoryRepositoryDouble(Item());
         var result = await new InventoryOperationsUseCase(repository, OperationalAccessFixture.Create())
-            .IssueAsync(new(repository.ItemId, 1, 1, "Counter sale", DateTimeOffset.UtcNow), default);
+            .IssueAsync(new(repository.ItemId, 1, 1, "Counter sale", TestClock.Now), default);
 
         Assert.Equal("domain.rule", Assert.Single(result.Errors).Code);
     }
@@ -59,7 +59,7 @@ public class OperationalUseCaseTests
         var access = OperationalAccessFixture.Create(auditStore: new InMemoryAuditStore { Failure = new IOException("storage failure") });
         var useCase = new InventoryOperationsUseCase(repository, access);
 
-        await Assert.ThrowsAsync<IOException>(() => useCase.ReceiveAsync(new(repository.ItemId, 1, 5, "synthetic receipt", DateTimeOffset.UtcNow), default));
+        await Assert.ThrowsAsync<IOException>(() => useCase.ReceiveAsync(new(repository.ItemId, 1, 5, "synthetic receipt", TestClock.Now), default));
 
         var item = await repository.GetByIdAsync(EntityId.From(repository.ItemId), default);
         Assert.Equal(0, item!.Value.QuantityOnHand);
@@ -175,11 +175,11 @@ public async Task ShipmentBookingRejectsInvalidRequest()
         var verificationId = Guid.NewGuid();
         request = request with { IdentityVerificationId = verificationId };
         var wrongBranch = new IdentityVerificationRecord(EntityId.From(verificationId), EntityId.New(), VerificationMethod.InPersonReview, EntityId.New());
-        wrongBranch.MarkVerified(DateTimeOffset.UtcNow);
+        wrongBranch.MarkVerified(TestClock.Now);
         repository.Set(wrongBranch, 1);
         var foreign = await useCase.IssueAsync(request with { OrderNumber = "MO-900002" }, default);
         var verified = new IdentityVerificationRecord(EntityId.From(verificationId), EntityId.New(), VerificationMethod.InPersonReview, EntityId.From(request.OriginatingBranchId));
-        verified.MarkVerified(DateTimeOffset.UtcNow);
+        verified.MarkVerified(TestClock.Now);
         repository.Set(verified, 1);
         var accepted = await useCase.IssueAsync(request with { OrderNumber = "MO-900003" }, default);
 

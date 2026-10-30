@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using ApexPost.Application.Persistence;
 using ApexPost.Application.Transactions;
 using ApexPost.Domain.Common;
@@ -19,6 +20,18 @@ public class TransactionOperationsUseCaseTests
 
         Assert.Equal(25.00m, updated.Value.Total);
         Assert.Equal(12.50m, Assert.Single(updated.Value.Lines).UnitPrice);
+    }
+
+    [Fact]
+    public async Task CreateAsync_StampsCreationTimeFromTimeProvider()
+    {
+        var fixture = new Fixture(null);
+        fixture.Clock.Advance(TimeSpan.FromHours(3));
+
+        var created = await fixture.UseCase.CreateAsync(new(Guid.NewGuid(), "Counter 1", "INR"), default);
+
+        var stored = await fixture.Repository.GetByIdAsync(EntityId.From(created.Value.Id), default);
+        Assert.Equal(TestClock.Now.AddHours(3), stored!.Value.CreatedAtUtc);
     }
 
     [Fact]
@@ -122,13 +135,14 @@ public class TransactionOperationsUseCaseTests
     private sealed class Fixture
     {
         public MutableActor Actor { get; } = new(Guid.NewGuid(), "Administrator");
+        public FakeTimeProvider Clock { get; } = TestClock.Create();
 
         public Fixture(ServicePrice? price)
         {
             Repository = new TransactionRepositoryDouble();
             PriceLookup = new PriceLookupDouble(price);
             Coordinator = new PaymentCoordinatorDouble(Repository);
-            UseCase = new TransactionOperationsUseCase(Repository, PriceLookup, Coordinator, OperationalAccessFixture.Create(branchId: Actor.AssignedBranchId, currentActor: Actor));
+            UseCase = new TransactionOperationsUseCase(Repository, PriceLookup, Coordinator, OperationalAccessFixture.Create(branchId: Actor.AssignedBranchId, currentActor: Actor), Clock);
         }
 
         public TransactionRepositoryDouble Repository { get; }

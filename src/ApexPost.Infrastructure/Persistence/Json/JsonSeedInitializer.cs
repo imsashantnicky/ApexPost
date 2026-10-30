@@ -17,16 +17,21 @@ public sealed class JsonSeedInitializer
 {
     private readonly JsonDataOptions dataOptions;
     private readonly JsonSeedOptions seedOptions;
+    private readonly TimeProvider timeProvider;
 
     public JsonSeedInitializer(
         JsonDataOptions dataOptions,
-        JsonSeedOptions seedOptions)
+        JsonSeedOptions seedOptions,
+        TimeProvider timeProvider)
     {
         this.dataOptions = dataOptions
             ?? throw new ArgumentNullException(nameof(dataOptions));
 
         this.seedOptions = seedOptions
             ?? throw new ArgumentNullException(nameof(seedOptions));
+
+        this.timeProvider = timeProvider
+            ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async Task InitializeAsync(
@@ -84,7 +89,7 @@ public sealed class JsonSeedInitializer
                 item.ServiceCode, item, cancellationToken);
         }
 
-        await SeedOperationalDataAsync(directory, Branch, Service, cancellationToken);
+        await SeedOperationalDataAsync(directory, Branch, Service, timeProvider.GetUtcNow(), cancellationToken);
     }
 
     /// <summary>Adds each seed row whose id and business key are both unused; returns business key to stored id.</summary>
@@ -109,7 +114,7 @@ public sealed class JsonSeedInitializer
             return (changed, (IReadOnlyDictionary<string, Guid>)idsByKey);
         }, cancellationToken);
 
-    private static async Task SeedOperationalDataAsync(string directory, Func<Guid, Guid> branch, Func<Guid, Guid> service, CancellationToken token)
+    private static async Task SeedOperationalDataAsync(string directory, Func<Guid, Guid> branch, Func<Guid, Guid> service, DateTimeOffset now, CancellationToken token)
     {
         var options = new JsonDataOptions { DataDirectory = directory };
         var rates = new JsonCollectionStore<SeedShippingRate>(directory, "shipping-rates.json");
@@ -120,7 +125,7 @@ public sealed class JsonSeedInitializer
         for (var index = 0; index < 30; index++)
         {
             token.ThrowIfCancellationRequested();
-            var occurredAt = SeedData.SampleDate(index);
+            var occurredAt = SeedData.SampleDate(now, index);
             var item = new InventoryItem(EntityId.From(SeedData.StableId(6, index + 1)),
                 EntityId.From(branch(SeedData.Branches[index % SeedData.Branches.Length].Id)),
                 InventorySku.From($"ENV-{index + 1:000}"), $"Synthetic stock item {index + 1:00}", 3);
@@ -156,7 +161,7 @@ public sealed class JsonSeedInitializer
                 1 => VerificationStatus.Verified,
                 _ => VerificationStatus.Rejected
             };
-            DateTimeOffset? completedAt = status == VerificationStatus.Pending ? null : SeedData.SampleDate(index);
+            DateTimeOffset? completedAt = status == VerificationStatus.Pending ? null : SeedData.SampleDate(now, index);
             var rejection = status == VerificationStatus.Rejected ? "Synthetic sample review rejection" : null;
             var record = IdentityVerificationRecord.Restore(EntityId.From(SeedData.StableId(8, index + 1)),
                 EntityId.From(SeedData.StableId(10, index + 1)), VerificationMethod.InPersonReview,
@@ -185,7 +190,7 @@ public sealed class JsonSeedInitializer
             token.ThrowIfCancellationRequested();
             var transaction = new RetailTransaction(EntityId.From(SeedData.StableId(4, index + 1)),
                 EntityId.From(branch(SeedData.Branches[index % SeedData.Branches.Length].Id)),
-                $"HIST-{index + 1:0000}", "INR", SeedData.SampleDate(index));
+                $"HIST-{index + 1:0000}", "INR", SeedData.SampleDate(now, index));
             transaction.AddLineItem(EntityId.From(service(SeedData.Services[(index + 16) % SeedData.Services.Length].Id)),
                 "Synthetic retail catalogue item", 1, 30m + index % 10, TransactionLineKind.RetailProduct);
             transaction.AddLineItem(EntityId.From(service(SeedData.Services[index % SeedData.Services.Length].Id)),
@@ -272,8 +277,8 @@ public sealed class JsonSeedInitializer
             Guid.Parse(
                 $"{group:D8}-0000-0000-0000-{number:D12}");
 
-        public static DateTimeOffset SampleDate(int index) =>
-            new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero).AddDays(-(index % 40)).AddHours(8 + index % 9);
+        public static DateTimeOffset SampleDate(DateTimeOffset now, int index) =>
+            new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero).AddDays(-(index % 40)).AddHours(8 + index % 9);
 
         private static readonly BranchInput[] BranchInputs =
         [

@@ -5,6 +5,7 @@ using ApexPost.Domain.Common;
 using ApexPost.Domain.Inventory;
 using ApexPost.Domain.Staff;
 using ApexPost.Infrastructure.Persistence.Json;
+using Microsoft.Extensions.Time.Testing;
 
 namespace ApexPost.Infrastructure.Tests;
 
@@ -158,6 +159,16 @@ public async Task ExistingRecordsArePreserved()
     }
 
     [Fact]
+    public async Task Seed_SampleDatesComeFromTheTimeProvider()
+    {
+        await Initializer(enabled: true).InitializeAsync(default);
+
+        var transactions = await new JsonRetailTransactionRepository(new JsonDataOptions { DataDirectory = directory }).ListAsync(default);
+        var earliest = new DateTimeOffset(SeedNow.UtcDateTime.Date, TimeSpan.Zero).AddDays(-39);
+        Assert.All(transactions, item => Assert.InRange(item.Value.CreatedAtUtc!.Value, earliest, SeedNow.AddDays(1)));
+    }
+
+    [Fact]
     public async Task InventoryRepository_RejectsDuplicateSkuWithinBranch()
     {
         var repository = new JsonInventoryItemRepository(new JsonDataOptions { DataDirectory = directory });
@@ -186,7 +197,9 @@ public async Task ExistingRecordsArePreserved()
         Assert.Equal("{ invalid", await File.ReadAllTextAsync(path));
     }
 
-    private JsonSeedInitializer Initializer(bool enabled) => new(new JsonDataOptions { DataDirectory = directory }, new JsonSeedOptions { Enabled = enabled });
+    private static readonly DateTimeOffset SeedNow = new(2026, 6, 15, 9, 30, 0, TimeSpan.Zero);
+
+    private JsonSeedInitializer Initializer(bool enabled) => new(new JsonDataOptions { DataDirectory = directory }, new JsonSeedOptions { Enabled = enabled }, new FakeTimeProvider(SeedNow));
 
     private async Task<int> CountAsync(string fileName)
     {

@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 
 namespace ApexPost.Web.Controllers;
-public sealed class AccountController(LocalAccountService accounts, IStaffRepository staffRepository, IBranchRepository branchRepository) : Controller
+public sealed class AccountController(LocalAccountService accounts, IStaffRepository staffRepository, IBranchRepository branchRepository, TimeProvider timeProvider) : Controller
 {
     [HttpGet] public async Task<IActionResult> Bootstrap(CancellationToken token) => await accounts.HasAccountsAsync(token) ? NotFound() : View(await PopulateBootstrapStaffAsync(new BootstrapViewModel(), token));
     [HttpPost, ValidateAntiForgeryToken]
@@ -70,7 +70,7 @@ public sealed class AccountController(LocalAccountService accounts, IStaffReposi
         {
             IsPersistent = false,
             AllowRefresh = false,
-            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
+            ExpiresUtc = timeProvider.GetUtcNow().AddHours(8)
         };
 
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);

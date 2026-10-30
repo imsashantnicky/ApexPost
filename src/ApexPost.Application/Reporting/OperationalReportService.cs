@@ -31,6 +31,7 @@ public sealed class OperationalReportService
     private readonly ICurrentActor currentActor;
     private readonly IStaffRepository staffRepository;
     private readonly OperationalAccess access;
+    private readonly TimeProvider timeProvider;
 
     public OperationalReportService(
         IBranchRepository branchRepository,
@@ -41,7 +42,8 @@ public sealed class OperationalReportService
         IIdentityVerificationRepository verificationRepository,
         ICurrentActor currentActor,
         IStaffRepository staffRepository,
-        OperationalAccess access)
+        OperationalAccess access,
+        TimeProvider timeProvider)
     {
         this.branchRepository = branchRepository ?? throw new ArgumentNullException(nameof(branchRepository));
         this.inventoryRepository = inventoryRepository ?? throw new ArgumentNullException(nameof(inventoryRepository));
@@ -52,6 +54,7 @@ public sealed class OperationalReportService
         this.currentActor = currentActor ?? throw new ArgumentNullException(nameof(currentActor));
         this.staffRepository = staffRepository ?? throw new ArgumentNullException(nameof(staffRepository));
         this.access = access ?? throw new ArgumentNullException(nameof(access));
+        this.timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async Task<ApplicationResult<OperationalSummaryReport>> BuildAsync(CancellationToken cancellationToken)
@@ -99,7 +102,7 @@ public sealed class OperationalReportService
         var dailySales = BuildDailyBranchSales(branches, transactions);
         var shipmentVolume = BuildShipmentVolume(shipments);
 
-        return ApplicationResults.Success(new OperationalSummaryReport(transactionReport, paymentReport, shipmentReport, inventoryReport, branchActivity, DateTimeOffset.UtcNow)
+        return ApplicationResults.Success(new OperationalSummaryReport(transactionReport, paymentReport, shipmentReport, inventoryReport, branchActivity, timeProvider.GetUtcNow())
         {
             DailySales = dailySales,
             ShipmentVolumeByZoneAndServiceLevel = shipmentVolume

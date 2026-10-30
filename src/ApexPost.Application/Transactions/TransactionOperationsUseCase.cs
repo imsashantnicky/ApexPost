@@ -12,13 +12,15 @@ public sealed class TransactionOperationsUseCase
     private readonly IServicePriceLookup prices;
     private readonly ITransactionPaymentCoordinator paymentCoordinator;
     private readonly OperationalAccess access;
+    private readonly TimeProvider timeProvider;
 
-    public TransactionOperationsUseCase(IRetailTransactionRepository repository, IServicePriceLookup prices, ITransactionPaymentCoordinator paymentCoordinator, OperationalAccess access)
+    public TransactionOperationsUseCase(IRetailTransactionRepository repository, IServicePriceLookup prices, ITransactionPaymentCoordinator paymentCoordinator, OperationalAccess access, TimeProvider timeProvider)
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         this.prices = prices ?? throw new ArgumentNullException(nameof(prices));
         this.paymentCoordinator = paymentCoordinator ?? throw new ArgumentNullException(nameof(paymentCoordinator));
         this.access = access;
+        this.timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async Task<ApplicationResult<TransactionResponse>> CreateAsync(CreateTransactionRequest request, CancellationToken cancellationToken)
@@ -28,7 +30,7 @@ public sealed class TransactionOperationsUseCase
         if (!authorized.IsSuccess) return Failure<TransactionResponse>(authorized.Errors);
         try
         {
-            var transaction = new RetailTransaction(EntityId.New(), branchId, request.CounterReference, request.CurrencyCode, DateTimeOffset.UtcNow);
+            var transaction = new RetailTransaction(EntityId.New(), branchId, request.CounterReference, request.CurrencyCode, timeProvider.GetUtcNow());
             await access.AuditAsync("Transaction.Create", "RetailTransaction", transaction.Id.Value.ToString("D"), branchId.Value, "Started", null, cancellationToken);
             if (!await repository.TryAddAsync(transaction, cancellationToken)) { await access.AuditAsync("Transaction.Create", "RetailTransaction", transaction.Id.Value.ToString("D"), branchId.Value, "Failed", new Dictionary<string, string> { ["Status"] = "concurrency.conflict" }, cancellationToken); return Conflict<TransactionResponse>(); }
             await access.AuditAsync("Transaction.Create", "RetailTransaction", transaction.Id.Value.ToString("D"), branchId.Value, "Succeeded", null, cancellationToken);
