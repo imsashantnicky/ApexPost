@@ -1,21 +1,20 @@
-using ApexPost.Application.Branches;
+using ApexPost.Web.Security;
 using ApexPost.Application.Catalogue;
 using ApexPost.Application.Security;
 using ApexPost.Application.Transactions;
-using ApexPost.Domain.Branches;
-using ApexPost.Domain.Common;
 using ApexPost.Web.Extensions;
 using ApexPost.Web.Models;
+using ApexPost.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApexPost.Web.Controllers;
 
-[Authorize(Policy = "CounterOperations")]
+[Authorize(Policy = Policies.CounterOperations)]
 public sealed class TransactionsController(
     TransactionOperationsUseCase useCase,
     CatalogueManagementUseCase catalogue,
-    IBranchRepository branches,
+    BranchSelectionService branchSelection,
     ICurrentActor currentActor) : Controller
 {
     [HttpGet]
@@ -29,26 +28,25 @@ public sealed class TransactionsController(
     public async Task<IActionResult> Create(CancellationToken token)
     {
         var model = new TransactionCreateForm { CurrencyCode = "INR" };
-        await PopulateBranchesAsync(model, token);
+        await branchSelection.PopulateAsync(model, token);
         return View(model);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(TransactionCreateForm model, CancellationToken token)
     {
-        var actor = currentActor.Actor;
-        if (actor?.Role != "Administrator" && actor?.AssignedBranchId is Guid assignedBranch) model.BranchId = assignedBranch;
+        branchSelection.ApplyActorBranch(model);
         if (!ModelState.IsValid || model.BranchId == Guid.Empty)
         {
             ModelState.AddModelError(nameof(model.BranchId), "Select an available branch.");
-            await PopulateBranchesAsync(model, token);
+            await branchSelection.PopulateAsync(model, token);
             return View(model);
         }
         var result = await useCase.CreateAsync(new(model.BranchId, model.CounterReference, model.CurrencyCode), token);
         if (!result.IsSuccess)
         {
             ModelState.AddModelError(string.Empty, SafeFailure(result.Errors));
-            await PopulateBranchesAsync(model, token);
+            await branchSelection.PopulateAsync(model, token);
             return View(model);
         }
         TempData["Status"] = "Counter transaction opened.";
@@ -65,7 +63,7 @@ public sealed class TransactionsController(
         var receipt = result.Value.Status == ApexPost.Domain.Transactions.TransactionStatus.Paid
             ? (await useCase.GetReceiptAsync(id, token)).Value
             : null;
-        return View(new TransactionDetailsViewModel(result.Value, services, role is "Administrator" or "BranchManager", receipt, Guid.NewGuid().ToString("N")));
+        return View(new TransactionDetailsViewModel(result.Value, services, StaffRoleMapping.Allows(role, OperationalCapability.BranchManager), receipt, Guid.NewGuid().ToString("N")));
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -139,20 +137,6 @@ public sealed class TransactionsController(
         return RedirectToAction(nameof(Details), new { id = model.TransactionId });
     }
 
-    private async Task PopulateBranchesAsync(TransactionCreateForm model, CancellationToken token)
-    {
-        if (currentActor.Actor?.Role == "Administrator")
-        {
-            model.Branches = (await branches.ListAsync(token)).Where(item => item.Value.Status == BranchStatus.Active)
-                .Select(item => new BranchOption(item.Value.Id.Value, item.Value.Name)).OrderBy(item => item.Name).ToArray();
-        }
-        else if (currentActor.Actor?.AssignedBranchId is Guid branchId)
-        {
-            var branch = await branches.GetByIdAsync(EntityId.From(branchId), token);
-            model.Branches = branch is null ? [] : [new BranchOption(branch.Value.Id.Value, branch.Value.Name)];
-            model.BranchId = branchId;
-        }
-    }
 
     private void SetOutcome(bool succeeded, IReadOnlyList<ApexPost.Application.Results.ValidationError> errors, string successMessage)
     {

@@ -1,3 +1,4 @@
+using ApexPost.Application.Auditing;
 using ApexPost.Application.Inventory;
 using ApexPost.Application.MoneyOrders;
 using ApexPost.Application.Security;
@@ -70,17 +71,15 @@ public sealed class OperationalServiceRegistrationTests : IDisposable
             Assert.NotNull(scoped.GetRequiredService(controller));
         }
 
-        var writer = scoped.GetRequiredService<IAccessAuditWriter>();
-        var concreteWriter = scoped.GetRequiredService<JsonAuditWriter>();
-        Assert.Same(concreteWriter, writer);
-        await writer.WriteAdministratorCrossBranchAccessAsync(
+        Assert.IsType<JsonLinesAuditStore>(scoped.GetRequiredService<IAuditStore>());
+        Assert.Same(TimeProvider.System, scoped.GetRequiredService<TimeProvider>());
+        await scoped.GetRequiredService<AuditTrail>().RecordCrossBranchAccessAsync(
             new ActorContext(Guid.NewGuid(), "Administrator", Guid.NewGuid(), "registration-test-correlation"),
             Guid.NewGuid(), "Inventory.Read", default);
 
-        var records = await new JsonCollectionStore<JsonAuditRecord>(dataDirectory, "audit.json").ReadAllAsync(default);
-        var record = Assert.Single(records.Values);
+        var record = Assert.Single(await new JsonLinesAuditStore(dataDirectory).ReadAllAsync(default));
         Assert.Equal("Administrator.CrossBranchAccess", record.Action);
-        Assert.Equal("Branch", record.EntityType);
+        Assert.Equal("Branch", record.TargetType);
         Assert.Equal("registration-test-correlation", record.CorrelationId);
         Assert.Equal("Inventory.Read", record.Metadata["Operation"]);
     }

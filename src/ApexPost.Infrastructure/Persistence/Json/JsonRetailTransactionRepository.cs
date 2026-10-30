@@ -40,12 +40,9 @@ public sealed class JsonRetailTransactionRepository : IRetailTransactionReposito
             return (true, new PaymentStartWriteResult(ToDomain(updated), false));
         }, cancellationToken);
 
-    public async Task<bool> TryAddAsync(RetailTransaction transaction, CancellationToken cancellationToken)
-    {
-        var all = await store.ReadAllAsync(cancellationToken);
-        if (all.Values.Any(x => x.CounterReference == transaction.CounterReference && x.BranchId == transaction.BranchId.Value)) return false;
-        return await store.TryAddAsync(transaction.Id.Value.ToString("N"), ToData(transaction, 1), cancellationToken);
-    }
+    public Task<bool> TryAddAsync(RetailTransaction transaction, CancellationToken cancellationToken) =>
+        store.TryAddUniqueAsync(transaction.Id.Value.ToString("N"), ToData(transaction, 1),
+            x => x.CounterReference == transaction.CounterReference && x.BranchId == transaction.BranchId.Value, cancellationToken);
 
     public Task<bool> TryUpdateAsync(RetailTransaction transaction, long expectedVersion, CancellationToken cancellationToken) =>
         store.ExecuteAtomicAsync(items =>
@@ -58,42 +55,17 @@ public sealed class JsonRetailTransactionRepository : IRetailTransactionReposito
 
     private static Versioned<RetailTransaction> ToDomain(Data x)
     {
-        var transaction = new RetailTransaction(EntityId.From(x.Id), EntityId.From(x.BranchId), x.CounterReference, x.CurrencyCode, x.CreatedAtUtc);
-        foreach (var item in x.Lines)
+        try
         {
-            transaction.AddLineItem(EntityId.From(item.ServiceId), item.Description, item.Quantity, item.UnitPrice, item.Kind);
+            var transaction = RetailTransaction.Restore(EntityId.From(x.Id), EntityId.From(x.BranchId), x.CounterReference, x.CurrencyCode, x.CreatedAtUtc, x.Status, x.VoidReason,
+                x.Lines.Select(item => new TransactionLineState(EntityId.From(item.Id), EntityId.From(item.ServiceId), item.Description, item.Quantity, item.UnitPrice, item.Kind)),
+                x.Payments.Select(payment => new PaymentState(EntityId.From(payment.Id), payment.Amount, payment.CurrencyCode, payment.Method, payment.Reference, payment.Status, payment.DeclineReason, payment.ReversalReason)));
+            return new Versioned<RetailTransaction>(transaction, x.Version);
         }
-
-        foreach (var payment in x.Payments)
+        catch (DomainException exception)
         {
-            var record = payment.Status switch
-            {
-                PaymentStatus.Pending => transaction.StartPayment(payment.Amount, payment.Method, payment.Reference),
-                PaymentStatus.Confirmed or PaymentStatus.Reversed => transaction.StartPayment(payment.Amount, payment.Method, payment.Reference),
-                PaymentStatus.Declined => transaction.StartPayment(payment.Amount, payment.Method, payment.Reference),
-                PaymentStatus.Cancelled => transaction.StartPayment(payment.Amount, payment.Method, payment.Reference),
-                _ => throw new InvalidOperationException("Persisted payment status is not supported.")
-            };
-
-            if (payment.Status is PaymentStatus.Confirmed or PaymentStatus.Reversed)
-            {
-                transaction.ConfirmPayment();
-            }
-            else if (payment.Status == PaymentStatus.Declined)
-            {
-                transaction.DeclinePayment(payment.DeclineReason ?? "Legacy decline reason unavailable");
-            }
-            else if (payment.Status == PaymentStatus.Cancelled)
-            {
-                transaction.Cancel(x.VoidReason ?? "Legacy void reason unavailable");
-            }
+            throw new JsonPersistenceException($"Persisted transaction '{x.Id:D}' is inconsistent and could not be restored.", exception);
         }
-
-        if (x.Status == TransactionStatus.Reversed) transaction.ReversePayment(x.Payments.FirstOrDefault(p => p.Status == PaymentStatus.Reversed)?.ReversalReason ?? "Legacy reversal reason unavailable");
-        if (x.Status == TransactionStatus.Cancelled && transaction.Status != TransactionStatus.Cancelled) transaction.Cancel(x.VoidReason ?? "Legacy void reason unavailable");
-        if (x.Status != transaction.Status) throw new InvalidOperationException("Persisted transaction status is inconsistent with its payment history.");
-
-        return new Versioned<RetailTransaction>(transaction, x.Version);
     }
 
     private static Data ToData(RetailTransaction transaction, long version) => new(

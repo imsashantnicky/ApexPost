@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using ApexPost.Application.Auditing;
 using ApexPost.Application.Security;
+using ApexPost.Infrastructure.Persistence.Json;
 using ApexPost.Web.Filters;
 using ApexPost.Web.Services;
 using Microsoft.AspNetCore.Http;
@@ -10,6 +12,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace ApexPost.Web.Tests;
 
@@ -18,7 +21,7 @@ public sealed class ActionFilterTests
     [Fact]
     public async Task AuditFilterWritesControlledActorAndOutcomeMetadataOnly()
     {
-        var writer = new CapturingAuditWriter();
+        var store = new InMemoryAuditStore();
         var http = new DefaultHttpContext();
         http.TraceIdentifier = "corr-filter-test";
         http.Request.Method = "POST";
@@ -32,17 +35,20 @@ public sealed class ActionFilterTests
         actionContext.RouteData.Values["action"] = "Refund";
         var filters = new List<IFilterMetadata>();
         var executing = new ActionExecutingContext(actionContext, filters, new Dictionary<string, object?>(), new object());
-        var filter = new AuditActionFilter(writer);
+        var filter = new AuditActionFilter(store.Trail(), TimeProvider.System);
 
         await filter.OnActionExecutionAsync(executing, () => Task.FromResult(new ActionExecutedContext(actionContext, filters, executing.Controller) { Result = new OkResult() }));
 
-        var record = Assert.Single(writer.Records);
-        Assert.Equal("11111111-1111-1111-1111-111111111111", record.Actor?.StaffId.ToString("D"));
-        Assert.Equal("BranchManager", record.Actor?.Role);
+        var record = Assert.Single(store.Entries);
+        Assert.Equal("11111111-1111-1111-1111-111111111111", record.StaffId?.ToString("D"));
+        Assert.Equal("BranchManager", record.Role);
         Assert.Equal(Guid.Parse("22222222-2222-2222-2222-222222222222"), record.BranchId);
-        Assert.Equal("Mvc.ActionCompleted", record.Operation);
+        Assert.Equal("Mvc.ActionCompleted", record.Action);
+        Assert.Equal("Transactions.Refund", record.TargetReference);
+        Assert.Equal("Transactions", record.Metadata["Controller"]);
+        Assert.Equal("Refund", record.Metadata["Action"]);
         Assert.Equal("Succeeded", record.Outcome);
-        Assert.Equal("corr-filter-test", record.Metadata["CorrelationId"]);
+        Assert.Equal("corr-filter-test", record.CorrelationId);
         Assert.DoesNotContain("Password", string.Join(',', record.Metadata.Keys));
     }
 
@@ -67,13 +73,11 @@ public sealed class ActionFilterTests
     [Fact]
     public async Task AuditFilterDoesNotSwallowAuditPersistenceFailure()
     {
-        var actionContext = new ActionContext(new DefaultHttpContext(), new RouteData(), new ActionDescriptor(), new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary());
-        var filters = new List<IFilterMetadata>();
-        var executing = new ActionExecutingContext(actionContext, filters, new Dictionary<string, object?>(), new object());
-        var filter = new AuditActionFilter(new CapturingAuditWriter { Failure = new IOException("private storage detail") });
+        var (executing, actionContext) = Context("POST", "Transactions", "Create");
+        var filter = new AuditActionFilter(new InMemoryAuditStore { Failure = new IOException("private storage detail") }.Trail(), TimeProvider.System);
 
         await Assert.ThrowsAsync<IOException>(() => filter.OnActionExecutionAsync(executing,
-            () => Task.FromResult(new ActionExecutedContext(actionContext, filters, executing.Controller) { Result = new OkResult() })));
+            () => Task.FromResult(new ActionExecutedContext(actionContext, [], executing.Controller) { Result = new OkResult() })));
     }
 
     [Fact]
@@ -92,14 +96,15 @@ public sealed class ActionFilterTests
         actionContext.RouteData.Values["action"] = "Book";
         var filters = new List<IFilterMetadata>();
         var executing = new ActionExecutingContext(actionContext, filters, new Dictionary<string, object?>(), new object());
-        var filter = new PerformanceActionFilter(configuration, factory.CreateLogger<PerformanceActionFilter>());
+        var time = new FakeTimeProvider();
+        var filter = new PerformanceActionFilter(configuration, factory.CreateLogger<PerformanceActionFilter>(), time);
         var called = false;
 
-        await filter.OnActionExecutionAsync(executing, async () =>
+        await filter.OnActionExecutionAsync(executing, () =>
         {
             called = true;
-            await Task.Delay(10);
-            return new ActionExecutedContext(actionContext, filters, executing.Controller);
+            time.Advance(TimeSpan.FromMilliseconds(10));
+            return Task.FromResult(new ActionExecutedContext(actionContext, filters, executing.Controller));
         });
 
         Assert.True(called);
@@ -109,20 +114,98 @@ public sealed class ActionFilterTests
         Assert.DoesNotContain("password", warning, StringComparison.OrdinalIgnoreCase);
     }
 
-    private sealed class CapturingAuditWriter : IAccessAuditWriter
+    [Fact]
+    public async Task AuditFilter_CorrelationIdContainingKey_DoesNotFailTheAction()
     {
-        public List<AuditCapture> Records { get; } = [];
-        public Exception? Failure { get; init; }
-        public Task WriteAdministratorCrossBranchAccessAsync(ActorContext actor, Guid branchId, string operation, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task WriteOperationAsync(ActorContext? actor, Guid? branchId, string operation, string targetType, string targetReference, string outcome, IReadOnlyDictionary<string, string>? safeMetadata, CancellationToken cancellationToken)
+        var directory = Path.Combine(Path.GetTempPath(), "ApexPostFilterTests", Guid.NewGuid().ToString("N"));
+        try
         {
-            if (Failure is not null) return Task.FromException(Failure);
-            Records.Add(new(actor, branchId, operation, targetReference, outcome, safeMetadata ?? new Dictionary<string, string>()));
-            return Task.CompletedTask;
+            var store = new JsonLinesAuditStore(directory);
+            var (executing, actionContext) = Context("POST", "Transactions", "Create", traceIdentifier: "monkey-1");
+            var filter = new AuditActionFilter(new AuditTrail(store, TimeProvider.System), TimeProvider.System);
+
+            await filter.OnActionExecutionAsync(executing, () => Task.FromResult(new ActionExecutedContext(actionContext, [], executing.Controller) { Result = new OkResult() }));
+
+            Assert.Equal("monkey-1", Assert.Single(await store.ReadAllAsync(default)).CorrelationId);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
         }
     }
 
-    private sealed record AuditCapture(ActorContext? Actor, Guid? BranchId, string Operation, string TargetReference, string Outcome, IReadOnlyDictionary<string, string> Metadata);
+    [Fact]
+    public async Task AuditFilter_GetPageView_IsNotAudited()
+    {
+        var store = new InMemoryAuditStore();
+        var (executing, actionContext) = Context("GET", "Inventory", "Index");
+        var called = false;
+
+        await new AuditActionFilter(store.Trail(), TimeProvider.System).OnActionExecutionAsync(executing, () =>
+        {
+            called = true;
+            return Task.FromResult(new ActionExecutedContext(actionContext, [], executing.Controller) { Result = new OkResult() });
+        });
+
+        Assert.True(called);
+        Assert.Empty(store.Entries);
+    }
+
+    [Fact]
+    public async Task AuditFilter_GetMarkedAudited_IsAudited()
+    {
+        var store = new InMemoryAuditStore();
+        var (executing, actionContext) = Context("GET", "Reports", "Index", filters: [new AuditedAttribute()]);
+
+        await new AuditActionFilter(store.Trail(), TimeProvider.System).OnActionExecutionAsync(executing, () =>
+            Task.FromResult(new ActionExecutedContext(actionContext, executing.Filters, executing.Controller) { Result = new OkResult() }));
+
+        Assert.Equal("Reports.Index", Assert.Single(store.Entries).TargetReference);
+    }
+
+    [Fact]
+    public async Task AuditFilter_RecordsRouteIdDurationAndFailureStatus()
+    {
+        var store = new InMemoryAuditStore();
+        var time = new FakeTimeProvider();
+        var id = Guid.NewGuid().ToString("D");
+        var (executing, actionContext) = Context("POST", "Transactions", "Void", routeId: id);
+
+        await new AuditActionFilter(store.Trail(time), time).OnActionExecutionAsync(executing, () =>
+        {
+            time.Advance(TimeSpan.FromMilliseconds(250));
+            return Task.FromResult(new ActionExecutedContext(actionContext, [], executing.Controller) { Result = new NotFoundResult() });
+        });
+
+        var entry = Assert.Single(store.Entries);
+        Assert.Equal(id, entry.Metadata["RouteId"]);
+        Assert.Equal("250", entry.Metadata["ElapsedMs"]);
+        Assert.Equal("404", entry.Metadata["StatusCode"]);
+        Assert.Equal("Failed", entry.Outcome);
+    }
+
+    [Fact]
+    public async Task AuditFilter_NonIdentifierRouteId_IsDropped()
+    {
+        var store = new InMemoryAuditStore();
+        var (executing, actionContext) = Context("POST", "Transactions", "Void", routeId: "4111 1111 1111 1111");
+
+        await new AuditActionFilter(store.Trail(), TimeProvider.System).OnActionExecutionAsync(executing, () =>
+            Task.FromResult(new ActionExecutedContext(actionContext, [], executing.Controller) { Result = new OkResult() }));
+
+        Assert.False(Assert.Single(store.Entries).Metadata.ContainsKey("RouteId"));
+    }
+
+    private static (ActionExecutingContext Executing, ActionContext ActionContext) Context(string method, string controller, string action, string traceIdentifier = "corr-filter-test", string? routeId = null, List<IFilterMetadata>? filters = null)
+    {
+        var http = new DefaultHttpContext { TraceIdentifier = traceIdentifier };
+        http.Request.Method = method;
+        var actionContext = new ActionContext(http, new RouteData(), new ActionDescriptor(), new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary());
+        actionContext.RouteData.Values["controller"] = controller;
+        actionContext.RouteData.Values["action"] = action;
+        if (routeId is not null) actionContext.RouteData.Values["id"] = routeId;
+        return (new ActionExecutingContext(actionContext, filters ?? [], new Dictionary<string, object?>(), new object()), actionContext);
+    }
 
     private sealed class CollectingLoggerProvider : ILoggerProvider
     {

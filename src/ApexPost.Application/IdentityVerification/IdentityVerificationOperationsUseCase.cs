@@ -5,7 +5,7 @@ using ApexPost.Domain.IdentityVerification;
 
 namespace ApexPost.Application.IdentityVerification;
 
-public sealed class IdentityVerificationOperationsUseCase(IIdentityVerificationRepository repository, OperationalAccess access)
+public sealed class IdentityVerificationOperationsUseCase(IIdentityVerificationRepository repository, OperationalAccess access, TimeProvider timeProvider)
 {
     public async Task<ApplicationResult<IdentityVerificationResponse>> GetAsync(Guid verificationId, CancellationToken cancellationToken)
     {
@@ -49,8 +49,8 @@ public sealed class IdentityVerificationOperationsUseCase(IIdentityVerificationR
         if (existing.Version != request.ExpectedVersion) { await access.AuditAsync("IdentityVerification.Complete", "IdentityVerification", existing.Value.Id.Value.ToString("D"), existing.Value.BranchId.Value, "Failed", new Dictionary<string, string> { ["Status"] = "concurrency.conflict" }, cancellationToken); return Conflict(); }
         try
         {
-            if (request.Verified) existing.Value.MarkVerified(DateTimeOffset.UtcNow);
-            else existing.Value.Reject(request.RejectionReason ?? string.Empty, DateTimeOffset.UtcNow);
+            if (request.Verified) existing.Value.MarkVerified(timeProvider.GetUtcNow());
+            else existing.Value.Reject(request.RejectionReason ?? string.Empty, timeProvider.GetUtcNow());
             await access.AuditAsync("IdentityVerification.Complete", "IdentityVerification", existing.Value.Id.Value.ToString("D"), existing.Value.BranchId?.Value, "Started", new Dictionary<string, string> { ["Verified"] = request.Verified.ToString() }, cancellationToken);
             if (!await repository.TryUpdateAsync(existing.Value, request.ExpectedVersion, cancellationToken)) { await access.AuditAsync("IdentityVerification.Complete", "IdentityVerification", existing.Value.Id.Value.ToString("D"), existing.Value.BranchId?.Value, "Failed", new Dictionary<string, string> { ["Status"] = "concurrency.conflict" }, cancellationToken); return Conflict(); }
             await access.AuditAsync("IdentityVerification.Complete", "IdentityVerification", existing.Value.Id.Value.ToString("D"), existing.Value.BranchId?.Value, "Succeeded", new Dictionary<string, string> { ["Status"] = existing.Value.Status.ToString(), ["Verified"] = request.Verified.ToString() }, cancellationToken);

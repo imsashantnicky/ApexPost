@@ -1,3 +1,4 @@
+using ApexPost.Application.Auditing;
 using ApexPost.Application.Results;
 using ApexPost.Domain.Common;
 using ApexPost.Domain.Staff;
@@ -9,12 +10,14 @@ public sealed class StaffManagementUseCase
 {
     private readonly IStaffRepository repository;
     private readonly ICurrentActor currentActor;
-    private readonly IAccessAuditWriter auditWriter;
-    public StaffManagementUseCase(IStaffRepository repository, ICurrentActor currentActor, IAccessAuditWriter auditWriter)
+    private readonly AuditTrail auditTrail;
+    private readonly StaffAccessCache accessCache;
+    public StaffManagementUseCase(IStaffRepository repository, ICurrentActor currentActor, AuditTrail auditTrail, StaffAccessCache accessCache)
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         this.currentActor = currentActor ?? throw new ArgumentNullException(nameof(currentActor));
-        this.auditWriter = auditWriter ?? throw new ArgumentNullException(nameof(auditWriter));
+        this.auditTrail = auditTrail ?? throw new ArgumentNullException(nameof(auditTrail));
+        this.accessCache = accessCache ?? throw new ArgumentNullException(nameof(accessCache));
     }
 
     public async Task<ApplicationResult<StaffResponse>> CreateAsync(CreateStaffRequest request, CancellationToken cancellationToken)
@@ -56,6 +59,7 @@ public sealed class StaffManagementUseCase
             existing.Value.ChangeRoles(request.Roles);
             await AuditAsync("Staff.Update", existing.Value, "Started", cancellationToken);
             if (!await repository.TryUpdateAsync(existing.Value, request.ExpectedVersion, cancellationToken)) return Conflict<StaffResponse>();
+            accessCache.Invalidate(existing.Value.Id.Value);
             await AuditAsync("Staff.Update", existing.Value, "Succeeded", cancellationToken);
             return ApplicationResults.Success(ToResponse(existing.Value, request.ExpectedVersion + 1));
         }
@@ -73,6 +77,7 @@ public sealed class StaffManagementUseCase
             existing.Value.Suspend();
             await AuditAsync("Staff.Deactivate", existing.Value, "Started", cancellationToken);
             if (!await repository.TryUpdateAsync(existing.Value, expectedVersion, cancellationToken)) return Conflict<StaffResponse>();
+            accessCache.Invalidate(existing.Value.Id.Value);
             await AuditAsync("Staff.Deactivate", existing.Value, "Succeeded", cancellationToken);
             return ApplicationResults.Success(ToResponse(existing.Value, expectedVersion + 1));
         }
@@ -80,7 +85,7 @@ public sealed class StaffManagementUseCase
     }
 
     private static StaffResponse ToResponse(StaffMember staff, long version) => new(staff.Id.Value, version, staff.EmployeeNumber.Value, staff.Name, staff.BranchId.Value, staff.Roles, staff.Status);
-    private Task AuditAsync(string operation, StaffMember staff, string outcome, CancellationToken token) => auditWriter.WriteOperationAsync(currentActor.Actor, staff.BranchId.Value, operation, "Staff", staff.Id.Value.ToString("D"), outcome, new Dictionary<string, string> { ["Status"] = staff.Status.ToString(), ["StaffRoles"] = string.Join(',', staff.Roles.Order()) }, token);
+    private Task AuditAsync(string operation, StaffMember staff, string outcome, CancellationToken token) => auditTrail.RecordAsync(currentActor.Actor, staff.BranchId.Value, operation, "Staff", staff.Id.Value.ToString("D"), outcome, new Dictionary<string, string> { ["Status"] = staff.Status.ToString(), ["StaffRoles"] = string.Join(',', staff.Roles.Order()) }, token);
     private static bool TryId(Guid value, out EntityId id) { id = value == Guid.Empty ? null! : EntityId.From(value); return value != Guid.Empty; }
     private static ApplicationResult<T> Invalid<T>() => ApplicationResults.Failure<T>([new("request.invalid", "The request is invalid.")]);
     private static ApplicationResult<T> NotFound<T>() => ApplicationResults.Failure<T>([new("resource.not-found", "The requested resource was not found.")]);

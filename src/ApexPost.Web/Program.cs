@@ -1,5 +1,6 @@
 using System.Net;
 using System.Threading.RateLimiting;
+using ApexPost.Application.Security;
 using ApexPost.Application.Staff;
 using ApexPost.Infrastructure.Persistence.Json;
 using ApexPost.Web.Extensions;
@@ -50,13 +51,13 @@ builder.Services.AddAuthorization(options =>
 {
     options.DefaultPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser().AddRequirements(new ValidatedStaffRequirement()).Build();
-    AddStaffRolePolicy(options, "AdministratorOnly", LocalAccountService.AdministratorRole);
-    AddStaffRolePolicy(options, "BranchManagement", LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole);
-    AddStaffRolePolicy(options, "CounterOperations", LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.CounterStaffRole);
-    AddStaffRolePolicy(options, "InventoryOperations", LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.InventoryStaffRole);
-    AddStaffRolePolicy(options, "ReportsAccess", LocalAccountService.AdministratorRole, LocalAccountService.BranchManagerRole, LocalAccountService.AuditorRole);
-    AddStaffRolePolicy(options, "AuditorReadOnly", LocalAccountService.AdministratorRole, LocalAccountService.AuditorRole);
-    AddStaffRolePolicy(options, "IntegrationCounter", LocalAccountService.CounterStaffRole);
+    AddStaffRolePolicy(options, Policies.AdministratorOnly, Roles.Administrator);
+    AddStaffRolePolicy(options, Policies.BranchManagement, Roles.Administrator, Roles.BranchManager);
+    AddStaffRolePolicy(options, Policies.CounterOperations, Roles.Administrator, Roles.BranchManager, Roles.CounterStaff);
+    AddStaffRolePolicy(options, Policies.InventoryOperations, Roles.Administrator, Roles.BranchManager, Roles.InventoryStaff);
+    AddStaffRolePolicy(options, Policies.ReportsAccess, Roles.Administrator, Roles.BranchManager, Roles.Auditor);
+    AddStaffRolePolicy(options, Policies.AuditorReadOnly, Roles.Administrator, Roles.Auditor);
+    AddStaffRolePolicy(options, Policies.IntegrationCounter, Roles.CounterStaff);
 });
 builder.Services.AddAntiforgery(options =>
 {

@@ -17,16 +17,21 @@ public sealed class JsonSeedInitializer
 {
     private readonly JsonDataOptions dataOptions;
     private readonly JsonSeedOptions seedOptions;
+    private readonly TimeProvider timeProvider;
 
     public JsonSeedInitializer(
         JsonDataOptions dataOptions,
-        JsonSeedOptions seedOptions)
+        JsonSeedOptions seedOptions,
+        TimeProvider timeProvider)
     {
         this.dataOptions = dataOptions
             ?? throw new ArgumentNullException(nameof(dataOptions));
 
         this.seedOptions = seedOptions
             ?? throw new ArgumentNullException(nameof(seedOptions));
+
+        this.timeProvider = timeProvider
+            ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async Task InitializeAsync(
@@ -63,29 +68,18 @@ public sealed class JsonSeedInitializer
         var pricing = new JsonCollectionStore<SeedPrice>(
             directory, "pricing.json");
 
-        foreach (var item in SeedData.Branches)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
+        // Seed rows are matched on their business keys, not only their GUIDs: an existing BLR-001, EMP-0001
+        // or EXP-001 stored under a different id is kept and the seed row is skipped. References from later
+        // seed rows are then pointed at whichever id is actually stored for that key.
+        var branchIdsByCode = await SeedByBusinessKeyAsync(branches, SeedData.Branches, x => x.Id, x => x.Code, cancellationToken);
+        var seedBranchCodes = SeedData.Branches.ToDictionary(x => x.Id, x => x.Code);
+        Guid Branch(Guid seedBranchId) => branchIdsByCode[seedBranchCodes[seedBranchId]];
 
-            await branches.TryAddAsync(
-                item.Id.ToString("N"), item, cancellationToken);
-        }
+        await SeedByBusinessKeyAsync(staff, SeedData.Staff.Select(x => x with { BranchId = Branch(x.BranchId) }), x => x.Id, x => x.EmployeeNumber, cancellationToken);
 
-        foreach (var item in SeedData.Staff)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            await staff.TryAddAsync(
-                item.Id.ToString("N"), item, cancellationToken);
-        }
-
-        foreach (var item in SeedData.Services)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            await catalogue.TryAddAsync(
-                item.Id.ToString("N"), item, cancellationToken);
-        }
+        var serviceIdsByCode = await SeedByBusinessKeyAsync(catalogue, SeedData.Services, x => x.Id, x => x.Code, cancellationToken);
+        var seedServiceCodes = SeedData.Services.ToDictionary(x => x.Id, x => x.Code);
+        Guid Service(Guid seedServiceId) => serviceIdsByCode[seedServiceCodes[seedServiceId]];
 
         foreach (var item in SeedData.Prices)
         {
@@ -95,10 +89,32 @@ public sealed class JsonSeedInitializer
                 item.ServiceCode, item, cancellationToken);
         }
 
-        await SeedOperationalDataAsync(directory, cancellationToken);
+        await SeedOperationalDataAsync(directory, Branch, Service, timeProvider.GetUtcNow(), cancellationToken);
     }
 
-    private static async Task SeedOperationalDataAsync(string directory, CancellationToken token)
+    /// <summary>Adds each seed row whose id and business key are both unused; returns business key to stored id.</summary>
+    private static Task<IReadOnlyDictionary<string, Guid>> SeedByBusinessKeyAsync<T>(
+        JsonCollectionStore<T> store, IEnumerable<T> seedRows, Func<T, Guid> id, Func<T, string> businessKey, CancellationToken cancellationToken) =>
+        store.ExecuteAtomicAsync(items =>
+        {
+            var idsByKey = new Dictionary<string, Guid>(StringComparer.Ordinal);
+            foreach (var existing in items.Values) idsByKey.TryAdd(businessKey(existing), id(existing));
+
+            var changed = false;
+            foreach (var row in seedRows)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var key = id(row).ToString("N");
+                if (idsByKey.ContainsKey(businessKey(row)) || items.ContainsKey(key)) continue;
+                items[key] = row;
+                idsByKey[businessKey(row)] = id(row);
+                changed = true;
+            }
+
+            return (changed, (IReadOnlyDictionary<string, Guid>)idsByKey);
+        }, cancellationToken);
+
+    private static async Task SeedOperationalDataAsync(string directory, Func<Guid, Guid> branch, Func<Guid, Guid> service, DateTimeOffset now, CancellationToken token)
     {
         var options = new JsonDataOptions { DataDirectory = directory };
         var rates = new JsonCollectionStore<SeedShippingRate>(directory, "shipping-rates.json");
@@ -109,9 +125,9 @@ public sealed class JsonSeedInitializer
         for (var index = 0; index < 30; index++)
         {
             token.ThrowIfCancellationRequested();
-            var occurredAt = SeedData.SampleDate(index);
+            var occurredAt = SeedData.SampleDate(now, index);
             var item = new InventoryItem(EntityId.From(SeedData.StableId(6, index + 1)),
-                EntityId.From(SeedData.Branches[index % SeedData.Branches.Length].Id),
+                EntityId.From(branch(SeedData.Branches[index % SeedData.Branches.Length].Id)),
                 InventorySku.From($"ENV-{index + 1:000}"), $"Synthetic stock item {index + 1:00}", 3);
             item.Receive(index % 4 == 0 ? 2 : 10, "Synthetic opening stock", occurredAt);
             if (index % 2 == 1) item.Issue(4, "Synthetic counter use", occurredAt.AddHours(1));
@@ -126,10 +142,10 @@ public sealed class JsonSeedInitializer
                 ShipmentNumber.From($"HS-{index + 1:000000}"),
                 new ShipmentParty("Synthetic Sender", new ShipmentAddress("1 Sample Road", "Pune", "411001", "IN")),
                 new ShipmentParty("Synthetic Recipient", new ShipmentAddress("2 Sample Road", "Mumbai", "400001", "IN")),
-                EntityId.From(SeedData.Services[index % SeedData.Services.Length].Id),
+                EntityId.From(service(SeedData.Services[index % SeedData.Services.Length].Id)),
                 new ShipmentPackage(1m + index % 5, "Synthetic sample goods"),
                 new ShipmentCharge(75m + index, "INR"), (ShipmentStatus)(index % 5),
-                EntityId.From(SeedData.Branches[index % SeedData.Branches.Length].Id),
+                EntityId.From(branch(SeedData.Branches[index % SeedData.Branches.Length].Id)),
                 $"Z{index % 10 + 1:00}", (ShippingServiceLevel)(index % 3));
             await shipments.TryAddAsync(shipment, token);
         }
@@ -145,11 +161,11 @@ public sealed class JsonSeedInitializer
                 1 => VerificationStatus.Verified,
                 _ => VerificationStatus.Rejected
             };
-            DateTimeOffset? completedAt = status == VerificationStatus.Pending ? null : SeedData.SampleDate(index);
+            DateTimeOffset? completedAt = status == VerificationStatus.Pending ? null : SeedData.SampleDate(now, index);
             var rejection = status == VerificationStatus.Rejected ? "Synthetic sample review rejection" : null;
             var record = IdentityVerificationRecord.Restore(EntityId.From(SeedData.StableId(8, index + 1)),
                 EntityId.From(SeedData.StableId(10, index + 1)), VerificationMethod.InPersonReview,
-                EntityId.From(SeedData.Branches[index % SeedData.Branches.Length].Id), status, completedAt, rejection);
+                EntityId.From(branch(SeedData.Branches[index % SeedData.Branches.Length].Id)), status, completedAt, rejection);
             verificationIds[index] = record.Id.Value;
             await verifications.TryAddAsync(record, token);
         }
@@ -162,7 +178,7 @@ public sealed class JsonSeedInitializer
             var amount = verificationId is null ? 150m + index * 10m : 600m + index * 10m;
             var order = MoneyOrder.Restore(EntityId.From(SeedData.StableId(9, index + 1)),
                 MoneyOrderNumber.From($"MO-{index + 1:000000}"), new MoneyOrderAmount(amount, "INR"),
-                EntityId.From(SeedData.Branches[index % SeedData.Branches.Length].Id),
+                EntityId.From(branch(SeedData.Branches[index % SeedData.Branches.Length].Id)),
                 new MoneyOrderBeneficiary($"Synthetic Beneficiary {index + 1:00}", $"SAMPLE-REF-{index + 1:0000}"),
                 (MoneyOrderStatus)(index % 4), verificationId is Guid id ? EntityId.From(id) : null);
             await moneyOrders.TryAddAsync(order, token);
@@ -173,11 +189,11 @@ public sealed class JsonSeedInitializer
         {
             token.ThrowIfCancellationRequested();
             var transaction = new RetailTransaction(EntityId.From(SeedData.StableId(4, index + 1)),
-                EntityId.From(SeedData.Branches[index % SeedData.Branches.Length].Id),
-                $"HIST-{index + 1:0000}", "INR", SeedData.SampleDate(index));
-            transaction.AddLineItem(EntityId.From(SeedData.Services[(index + 16) % SeedData.Services.Length].Id),
+                EntityId.From(branch(SeedData.Branches[index % SeedData.Branches.Length].Id)),
+                $"HIST-{index + 1:0000}", "INR", SeedData.SampleDate(now, index));
+            transaction.AddLineItem(EntityId.From(service(SeedData.Services[(index + 16) % SeedData.Services.Length].Id)),
                 "Synthetic retail catalogue item", 1, 30m + index % 10, TransactionLineKind.RetailProduct);
-            transaction.AddLineItem(EntityId.From(SeedData.Services[index % SeedData.Services.Length].Id),
+            transaction.AddLineItem(EntityId.From(service(SeedData.Services[index % SeedData.Services.Length].Id)),
                 "Synthetic counter service", 1, 40m + index % 7, TransactionLineKind.Service);
             switch (index % 5)
             {
@@ -261,8 +277,8 @@ public sealed class JsonSeedInitializer
             Guid.Parse(
                 $"{group:D8}-0000-0000-0000-{number:D12}");
 
-        public static DateTimeOffset SampleDate(int index) =>
-            new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero).AddDays(-(index % 40)).AddHours(8 + index % 9);
+        public static DateTimeOffset SampleDate(DateTimeOffset now, int index) =>
+            new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero).AddDays(-(index % 40)).AddHours(8 + index % 9);
 
         private static readonly BranchInput[] BranchInputs =
         [

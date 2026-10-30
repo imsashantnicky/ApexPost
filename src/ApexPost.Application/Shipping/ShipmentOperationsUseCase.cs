@@ -60,13 +60,13 @@ public sealed class ShipmentOperationsUseCase
 
     public async Task<ApplicationResult<IReadOnlyList<ShipmentResponse>>> ListAsync(CancellationToken cancellationToken)
     {
-        var actorCheck = await access.CheckCurrentBranchAsync(OperationalCapability.Counter, "Shipment.List", cancellationToken);
-        if (!actorCheck.IsSuccess) return Failure<IReadOnlyList<ShipmentResponse>>(actorCheck.Errors);
-        var result = new List<ShipmentResponse>();
-        foreach (var item in await repository.ListAsync(cancellationToken))
-            if (item.Value.BranchId is not null && (await access.CheckAsync(item.Value.BranchId.Value, OperationalCapability.Counter, "Shipment.List", cancellationToken, requireOpenBranch: false)).IsSuccess)
-                result.Add(ToResponse(item.Value, item.Version));
-        return ApplicationResults.Success<IReadOnlyList<ShipmentResponse>>(result);
+        var scope = await access.AuthorizeListAsync(OperationalCapability.Counter, "Shipment.List", cancellationToken);
+        if (!scope.IsSuccess) return Failure<IReadOnlyList<ShipmentResponse>>(scope.Errors);
+        var shipments = await repository.ListAsync(cancellationToken);
+        return ApplicationResults.Success<IReadOnlyList<ShipmentResponse>>(shipments
+            .Where(item => item.Value.BranchId is not null && scope.Value.Includes(item.Value.BranchId.Value))
+            .Select(item => ToResponse(item.Value, item.Version))
+            .ToArray());
     }
 
     public Task<ApplicationResult<ShipmentResponse>> AcceptAsync(Guid id, long version, CancellationToken token) => ChangeAsync(id, version, static shipment => shipment.Accept(), token);

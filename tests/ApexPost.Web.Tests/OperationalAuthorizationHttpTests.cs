@@ -45,7 +45,7 @@ public sealed class OperationalAuthorizationHttpTests
         builder.Services.AddScoped<ICurrentActor, HttpCurrentActor>();
         builder.Services.AddSingleton<IBranchRepository>(branchRepo);
         builder.Services.AddSingleton<IStaffRepository>(staffRepo);
-        builder.Services.AddSingleton<IAccessAuditWriter, AuditWriter>();
+        builder.Services.AddSingleton(new InMemoryAuditStore().Trail());
         builder.Services.AddScoped<OperationalAccess>();
         builder.Services.AddAuthentication("Test").AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>("Test", _ => { });
         builder.Services.AddAuthorization(options => options.AddPolicy("CounterOperations", policy => policy.RequireRole("CounterStaff", "BranchManager", "Administrator")));
@@ -138,11 +138,5 @@ public sealed class OperationalAuthorizationHttpTests
             var branch = Branch.Restore(id, BranchCode.From("TST-910"), "HTTP Test Branch", new BranchAddress("1 Test Road", null, "Test City", "12345", "IN"), 1, status);
             return Task.FromResult<Versioned<Branch>?>(new(branch, 1));
         }
-    }
-
-    private sealed class AuditWriter : IAccessAuditWriter
-    {
-        public Task WriteAdministratorCrossBranchAccessAsync(ActorContext actor, Guid branchId, string operation, CancellationToken token) => Task.CompletedTask;
-        public Task WriteOperationAsync(ActorContext? actor, Guid? branchId, string operation, string targetType, string targetReference, string outcome, IReadOnlyDictionary<string, string>? safeMetadata, CancellationToken token) => Task.CompletedTask;
     }
 }

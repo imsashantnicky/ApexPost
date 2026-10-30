@@ -26,3 +26,7 @@ csharp_style_var_elsewhere = false:suggestion
 
 [*.{csproj,props,targets}]
 indent_size = 2
+
+# Test names follow the Method_Scenario_Result convention, so underscores are intentional there only.
+[tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none

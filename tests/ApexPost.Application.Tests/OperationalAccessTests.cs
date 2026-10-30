@@ -14,7 +14,7 @@ public sealed class OperationalAccessTests
     public async Task ActiveStaffCanAccessTheirOpenBranch()
     {
         var fixture = new Fixture();
-        var result = await fixture.Access.CheckAsync(fixture.BranchId, OperationalCapability.Counter, "test.same-branch", default);
+        var result = await fixture.Access.CheckAsync(fixture.BranchId, OperationalCapability.Counter, "Test.SameBranch", default);
         Assert.True(result.IsSuccess);
     }
 
@@ -24,7 +24,7 @@ public sealed class OperationalAccessTests
     public async Task InactiveStaffAreRejected(EmploymentStatus status)
     {
         var fixture = new Fixture(status: status);
-        var result = await fixture.Access.CheckAsync(fixture.BranchId, OperationalCapability.Counter, "test.inactive", default);
+        var result = await fixture.Access.CheckAsync(fixture.BranchId, OperationalCapability.Counter, "Test.Inactive", default);
         Assert.Equal("actor.inactive", Assert.Single(result.Errors).Code);
     }
 
@@ -32,7 +32,7 @@ public sealed class OperationalAccessTests
     public async Task MissingStaffIsRejected()
     {
         var fixture = new Fixture(staffExists: false);
-        var result = await fixture.Access.CheckAsync(fixture.BranchId, OperationalCapability.Counter, "test.missing-staff", default);
+        var result = await fixture.Access.CheckAsync(fixture.BranchId, OperationalCapability.Counter, "Test.MissingStaff", default);
         Assert.Equal("actor.not-found", Assert.Single(result.Errors).Code);
     }
 
@@ -41,16 +41,16 @@ public sealed class OperationalAccessTests
     {
         var fixture = new Fixture(role: "CounterStaff");
         var requestedBranchId = Guid.NewGuid();
-        var result = await fixture.Access.CheckAsync(requestedBranchId, OperationalCapability.Counter, "test.cross-branch", default);
+        var result = await fixture.Access.CheckAsync(requestedBranchId, OperationalCapability.Counter, "Test.CrossBranch", default);
         Assert.Equal("access.denied", Assert.Single(result.Errors).Code);
-        Assert.Equal((requestedBranchId, "test.cross-branch:Denied"), Assert.Single(fixture.Audit.Operations));
+        Assert.Equal((requestedBranchId, "Test.CrossBranch:Denied"), Assert.Single(fixture.Operations));
     }
 
     [Fact]
     public async Task MissingBranchIsRejected()
     {
         var fixture = new Fixture(branchExists: false);
-        var result = await fixture.Access.CheckAsync(fixture.BranchId, OperationalCapability.Counter, "test.missing-branch", default);
+        var result = await fixture.Access.CheckAsync(fixture.BranchId, OperationalCapability.Counter, "Test.MissingBranch", default);
         Assert.Equal("branch.not-found", Assert.Single(result.Errors).Code);
     }
 
@@ -58,7 +58,7 @@ public sealed class OperationalAccessTests
     public async Task ClosedBranchIsRejectedForWrites()
     {
         var fixture = new Fixture(branchStatus: BranchStatus.Closed);
-        var result = await fixture.Access.CheckAsync(fixture.BranchId, OperationalCapability.Counter, "test.closed-branch", default);
+        var result = await fixture.Access.CheckAsync(fixture.BranchId, OperationalCapability.Counter, "Test.ClosedBranch", default);
         Assert.Equal("branch.closed", Assert.Single(result.Errors).Code);
     }
 
@@ -69,7 +69,23 @@ public sealed class OperationalAccessTests
         var otherBranch = Guid.NewGuid();
         var result = await fixture.Access.CheckAsync(otherBranch, OperationalCapability.Counter, "MoneyOrder.Issue", default);
         Assert.True(result.IsSuccess);
-        Assert.Equal([(otherBranch, "MoneyOrder.Issue")], fixture.Audit.Operations);
+        Assert.Equal([(otherBranch, "MoneyOrder.Issue")], fixture.Operations);
+    }
+
+    [Theory]
+    [InlineData("Transaction.StartPayment")]
+    [InlineData("Transaction.PaymentConfirmed")]
+    [InlineData("Transaction.RetryPayment")]
+    [InlineData("IdentityVerification.Complete")]
+    public async Task AdministratorCrossBranch_PaymentAndIdentityOperations_Succeed(string operation)
+    {
+        var fixture = new Fixture(role: "Administrator");
+        var otherBranch = Guid.NewGuid();
+
+        var result = await fixture.Access.CheckAsync(otherBranch, OperationalCapability.Counter, operation, default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal([(otherBranch, operation)], fixture.Operations);
     }
 
     [Fact]
@@ -90,13 +106,20 @@ public sealed class OperationalAccessTests
             if (status == EmploymentStatus.Suspended) staff.Suspend();
             if (status == EmploymentStatus.Terminated) staff.Terminate();
             var actor = new ActorContext(StaffId, role, BranchId, "corr-test");
-            Audit = new CapturingAudit();
-            Access = new OperationalAccess(new CurrentActor(actor), new StaffRepository(staff, staffExists), new BranchRepository(branchExists, branchStatus), Audit);
+            Audit = new InMemoryAuditStore();
+            Access = new OperationalAccess(new CurrentActor(actor), new StaffRepository(staff, staffExists), new BranchRepository(branchExists, branchStatus), Audit.Trail());
         }
         public Guid BranchId { get; }
         public Guid StaffId { get; }
         public OperationalAccess Access { get; }
-        public CapturingAudit Audit { get; }
+        public InMemoryAuditStore Audit { get; }
+
+        // Cross-branch entries are keyed by the operation they authorized; everything else by action and outcome.
+        public IReadOnlyList<(Guid BranchId, string Operation)> Operations => Audit.Entries
+            .Select(entry => entry.Action == "Administrator.CrossBranchAccess"
+                ? (entry.BranchId ?? Guid.Empty, entry.Metadata["Operation"])
+                : (entry.BranchId ?? Guid.Empty, $"{entry.Action}:{entry.Outcome}"))
+            .ToArray();
     }
 
     private sealed class CurrentActor(ActorContext actor) : ICurrentActor { public ActorContext? Actor => actor; }
@@ -118,13 +141,5 @@ public sealed class OperationalAccessTests
         }
         public Task<bool> TryAddAsync(Branch value, CancellationToken token) => Task.FromResult(false);
         public Task<bool> TryUpdateAsync(Branch value, long version, CancellationToken token) => Task.FromResult(false);
-    }
-    private sealed class CapturingAudit : IAccessAuditWriter
-    {
-        public List<(Guid BranchId, string Operation)> Operations { get; } = [];
-        public Task WriteAdministratorCrossBranchAccessAsync(ActorContext actor, Guid branchId, string operation, CancellationToken token)
-        { Operations.Add((branchId, operation)); return Task.CompletedTask; }
-        public Task WriteOperationAsync(ActorContext? actor, Guid? branchId, string operation, string targetType, string targetReference, string outcome, IReadOnlyDictionary<string, string>? safeMetadata, CancellationToken token)
-        { Operations.Add((branchId ?? Guid.Empty, $"{operation}:{outcome}")); return Task.CompletedTask; }
     }
 }

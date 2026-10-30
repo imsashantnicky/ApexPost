@@ -1,8 +1,10 @@
+using ApexPost.Web.Security;
 using System.Security.Claims;
 using ApexPost.Web.Models;
 using ApexPost.Web.Services;
 using ApexPost.Application.Staff;
 using ApexPost.Application.Branches;
+using ApexPost.Application.Security;
 using ApexPost.Domain.Common;
 using ApexPost.Domain.Staff;
 using Microsoft.AspNetCore.Authentication;
@@ -12,7 +14,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 
 namespace ApexPost.Web.Controllers;
-public sealed class AccountController(LocalAccountService accounts, IStaffRepository staffRepository, IBranchRepository branchRepository) : Controller
+public sealed class AccountController(LocalAccountService accounts, IStaffRepository staffRepository, IBranchRepository branchRepository, TimeProvider timeProvider) : Controller
 {
     [HttpGet] public async Task<IActionResult> Bootstrap(CancellationToken token) => await accounts.HasAccountsAsync(token) ? NotFound() : View(await PopulateBootstrapStaffAsync(new BootstrapViewModel(), token));
     [HttpPost, ValidateAntiForgeryToken]
@@ -46,7 +48,7 @@ public sealed class AccountController(LocalAccountService accounts, IStaffReposi
             return View(model);
         }
         var linkedStaff = await staffRepository.GetByIdAsync(EntityId.From(staffId), token);
-        if (linkedStaff is null || linkedStaff.Value.Status != EmploymentStatus.Active || !RoleMatchesStaff(account.Role, linkedStaff.Value.Roles))
+        if (linkedStaff is null || linkedStaff.Value.Status != EmploymentStatus.Active || !StaffRoleMapping.MatchesStaff(account.Role, linkedStaff.Value.Roles))
         {
             ModelState.AddModelError(string.Empty, "Invalid user name or password.");
             return View(model);
@@ -56,7 +58,7 @@ public sealed class AccountController(LocalAccountService accounts, IStaffReposi
         {
             new(ClaimTypes.NameIdentifier, account.UserName),
             new(ClaimTypes.Name, account.UserName),
-            new(ClaimTypes.Role, LocalAccountService.NormalizeRole(account.Role))
+            new(ClaimTypes.Role, StaffRoleMapping.Normalize(account.Role))
         };
         claims.Add(new Claim(ActorClaimTypes.StaffId, linkedStaff.Value.Id.Value.ToString("D")));
         claims.Add(new Claim(ActorClaimTypes.AssignedBranchId, linkedStaff.Value.BranchId.Value.ToString("D")));
@@ -68,7 +70,7 @@ public sealed class AccountController(LocalAccountService accounts, IStaffReposi
         {
             IsPersistent = false,
             AllowRefresh = false,
-            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
+            ExpiresUtc = timeProvider.GetUtcNow().AddHours(8)
         };
 
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
@@ -76,14 +78,14 @@ public sealed class AccountController(LocalAccountService accounts, IStaffReposi
     }
     [Authorize, HttpPost, ValidateAntiForgeryToken] public async Task<IActionResult> Logout() { await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme); return RedirectToAction(nameof(Login)); }
     [HttpGet] public IActionResult AccessDenied() => View();
-    [Authorize(Policy = "AdministratorOnly")]
+    [Authorize(Policy = Policies.AdministratorOnly)]
     [HttpGet] public async Task<IActionResult> Provision(CancellationToken token) => View(await PopulateStaffAsync(new ProvisionAccountViewModel(), token));
-    [Authorize(Policy = "AdministratorOnly")]
+    [Authorize(Policy = Policies.AdministratorOnly)]
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Provision(ProvisionAccountViewModel model, CancellationToken token)
     {
         var staff = model.StaffId == Guid.Empty ? null : await staffRepository.GetByIdAsync(EntityId.From(model.StaffId), token);
-        var roleMatches = staff is not null && staff.Value.Status == EmploymentStatus.Active && RoleMatchesStaff(model.Role, staff.Value.Roles);
+        var roleMatches = staff is not null && staff.Value.Status == EmploymentStatus.Active && StaffRoleMapping.MatchesStaff(model.Role, staff.Value.Roles);
         if (!ModelState.IsValid || !roleMatches)
         {
             ModelState.AddModelError("", "Select an active staff member with a compatible role.");
@@ -101,32 +103,23 @@ public sealed class AccountController(LocalAccountService accounts, IStaffReposi
 
     private async Task<ProvisionAccountViewModel> PopulateStaffAsync(ProvisionAccountViewModel model, CancellationToken token)
     {
-        var branches = await branchRepository.ListAsync(token);
-        var branchNames = branches.ToDictionary(x => x.Value.Id.Value, x => x.Value.Name);
-        var staff = await staffRepository.ListAsync(token);
-        model.Staff = staff.Where(x => x.Value.Status == EmploymentStatus.Active)
-            .Select(x => new StaffOption(x.Value.Id.Value, x.Value.EmployeeNumber.Value, x.Value.Name, branchNames.GetValueOrDefault(x.Value.BranchId.Value, "Unavailable branch")))
-            .OrderBy(x => x.EmployeeNumber).ToArray();
+        model.Staff = await ActiveStaffOptionsAsync(token);
         return model;
     }
 
     private async Task<BootstrapViewModel> PopulateBootstrapStaffAsync(BootstrapViewModel model, CancellationToken token)
     {
-        var branches = await branchRepository.ListAsync(token);
-        var branchNames = branches.ToDictionary(x => x.Value.Id.Value, x => x.Value.Name);
-        var staff = await staffRepository.ListAsync(token);
-        model.Staff = staff.Where(x => x.Value.Status == EmploymentStatus.Active)
-            .Select(x => new StaffOption(x.Value.Id.Value, x.Value.EmployeeNumber.Value, x.Value.Name, branchNames.GetValueOrDefault(x.Value.BranchId.Value, "Unavailable branch")))
-            .OrderBy(x => x.EmployeeNumber).ToArray();
+        model.Staff = await ActiveStaffOptionsAsync(token);
         return model;
     }
 
-    private static bool RoleMatchesStaff(string role, IReadOnlyCollection<StaffRole> staffRoles) => LocalAccountService.NormalizeRole(role) switch
+    private async Task<StaffOption[]> ActiveStaffOptionsAsync(CancellationToken token)
     {
-        LocalAccountService.AdministratorRole or LocalAccountService.AuditorRole => true,
-        LocalAccountService.BranchManagerRole => staffRoles.Contains(StaffRole.BranchManager),
-        LocalAccountService.CounterStaffRole => staffRoles.Contains(StaffRole.CounterClerk),
-        LocalAccountService.InventoryStaffRole => staffRoles.Contains(StaffRole.InventoryClerk),
-        _ => false
-    };
+        var branches = await branchRepository.ListAsync(token);
+        var branchNames = branches.ToDictionary(x => x.Value.Id.Value, x => x.Value.Name);
+        var staff = await staffRepository.ListAsync(token);
+        return staff.Where(x => x.Value.Status == EmploymentStatus.Active)
+            .Select(x => new StaffOption(x.Value.Id.Value, x.Value.EmployeeNumber.Value, x.Value.Name, branchNames.GetValueOrDefault(x.Value.BranchId.Value, "Unavailable branch")))
+            .OrderBy(x => x.EmployeeNumber).ToArray();
+    }
 }

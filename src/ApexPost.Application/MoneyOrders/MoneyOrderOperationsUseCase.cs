@@ -56,6 +56,18 @@ public sealed class MoneyOrderOperationsUseCase
         return authorized.IsSuccess ? ApplicationResults.Success(ToResponse(moneyOrder.Value, moneyOrder.Version)) : Failure<MoneyOrderResponse>(authorized.Errors);
     }
 
+    public async Task<ApplicationResult<IReadOnlyList<MoneyOrderResponse>>> ListAsync(CancellationToken cancellationToken)
+    {
+        var scope = await access.AuthorizeListAsync(OperationalCapability.Counter, "MoneyOrder.List", cancellationToken);
+        if (!scope.IsSuccess) return Failure<IReadOnlyList<MoneyOrderResponse>>(scope.Errors);
+        var moneyOrders = await repository.ListAsync(cancellationToken);
+        return ApplicationResults.Success<IReadOnlyList<MoneyOrderResponse>>(moneyOrders
+            .Where(item => scope.Value.Includes(item.Value.OriginatingBranchId.Value))
+            .Select(item => ToResponse(item.Value, item.Version))
+            .OrderBy(item => item.OrderNumber, StringComparer.Ordinal)
+            .ToArray());
+    }
+
     public Task<ApplicationResult<MoneyOrderResponse>> MarkPaidAsync(Guid id, long version, CancellationToken token) => ChangeAsync(id, version, static moneyOrder => moneyOrder.MarkPaid(), token);
     public Task<ApplicationResult<MoneyOrderResponse>> CancelAsync(Guid id, long version, CancellationToken token) => ChangeAsync(id, version, static moneyOrder => moneyOrder.Cancel(), token);
     public Task<ApplicationResult<MoneyOrderResponse>> ExpireAsync(Guid id, long version, CancellationToken token) => ChangeAsync(id, version, static moneyOrder => moneyOrder.Expire(), token);

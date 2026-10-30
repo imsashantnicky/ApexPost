@@ -80,19 +80,19 @@ public sealed class DashboardController(
         Task<ApplicationResult<OperationalSummaryReport>>? reportTask = null;
         var independentReads = new List<Task>(4);
 
-        if (role is "Administrator" or "BranchManager" or "InventoryStaff")
+        if (StaffRoleMapping.Allows(role, OperationalCapability.Inventory))
         {
             inventoryTask = inventory.ListAsync(token);
             independentReads.Add(inventoryTask);
         }
-        if (role is "Administrator" or "BranchManager" or "CounterStaff")
+        if (StaffRoleMapping.Allows(role, OperationalCapability.Counter))
         {
             shipmentTask = shipments.ListAsync(token);
             transactionTask = transactions.ListAsync(token);
             independentReads.Add(shipmentTask);
             independentReads.Add(transactionTask);
         }
-        if (role is "Administrator" or "BranchManager" or "Auditor")
+        if (StaffRoleMapping.CanReadReports(role))
         {
             reportTask = reports.BuildAsync(token);
             independentReads.Add(reportTask);

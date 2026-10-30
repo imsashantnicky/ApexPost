@@ -10,14 +10,14 @@ namespace ApexPost.Application.Tests;
 
 internal static class OperationalAccessFixture
 {
-    public static OperationalAccess Create(Guid? branchId = null, string role = "Administrator", EmploymentStatus status = EmploymentStatus.Active, Guid? staffId = null, ICurrentActor? currentActor = null, IAccessAuditWriter? auditWriter = null)
+    public static OperationalAccess Create(Guid? branchId = null, string role = "Administrator", EmploymentStatus status = EmploymentStatus.Active, Guid? staffId = null, ICurrentActor? currentActor = null, InMemoryAuditStore? auditStore = null)
     {
         var assignedBranch = branchId ?? currentActor?.Actor?.AssignedBranchId ?? Guid.NewGuid();
         var actorId = staffId ?? currentActor?.Actor?.StaffId ?? Guid.NewGuid();
         var staff = new StaffMember(EntityId.From(actorId), EmployeeNumber.From("EMP-9001"), "Test Operator", EntityId.From(assignedBranch), [StaffRole.BranchManager]);
         if (status == EmploymentStatus.Suspended) staff.Suspend();
         if (status == EmploymentStatus.Terminated) staff.Terminate();
-        return new OperationalAccess(currentActor ?? new FixedActor(new ActorContext(actorId, role, assignedBranch, "test-correlation")), new StaffRepo(staff), new BranchRepo(), auditWriter ?? new Audit());
+        return new OperationalAccess(currentActor ?? new FixedActor(new ActorContext(actorId, role, assignedBranch, "test-correlation")), new StaffRepo(staff), new BranchRepo(), (auditStore ?? new InMemoryAuditStore()).Trail());
     }
 
     private sealed class FixedActor(ActorContext? actor) : ICurrentActor { public ActorContext? Actor => actor; }
@@ -40,11 +40,5 @@ internal static class OperationalAccessFixture
         }
         public Task<bool> TryAddAsync(Branch value, CancellationToken token) => Task.FromResult(false);
         public Task<bool> TryUpdateAsync(Branch value, long version, CancellationToken token) => Task.FromResult(false);
-    }
-
-    private sealed class Audit : IAccessAuditWriter
-    {
-        public Task WriteAdministratorCrossBranchAccessAsync(ActorContext actor, Guid branchId, string operation, CancellationToken token) => Task.CompletedTask;
-        public Task WriteOperationAsync(ActorContext? actor, Guid? branchId, string operation, string targetType, string targetReference, string outcome, IReadOnlyDictionary<string, string>? safeMetadata, CancellationToken token) => Task.CompletedTask;
     }
 }

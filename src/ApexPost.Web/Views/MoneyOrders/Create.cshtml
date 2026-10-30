@@ -7,7 +7,7 @@
         <input asp-for="IdentityVerificationId" type="hidden"/><input asp-for="VerificationThreshold" type="hidden"/>
         <div class="row g-3">
             <div class="col-md-6"><label asp-for="BranchId" class="form-label">Branch</label>
-            @if (User.IsInRole("Administrator")) { <select asp-for="BranchId" class="form-select"><option value="">Choose branch</option>@foreach (var branch in Model.Branches) { <option value="@branch.Id">@branch.Name</option> }</select> }
+            @if (User.IsInRole(Roles.Administrator)) { <select asp-for="BranchId" class="form-select"><option value="">Choose branch</option>@foreach (var branch in Model.Branches) { <option value="@branch.Id">@branch.Name</option> }</select> }
             else { <input asp-for="BranchId" type="hidden"/><input class="form-control" value="@(Model.Branches.FirstOrDefault()?.Name ?? "Unavailable")" readonly/> }
             <span asp-validation-for="BranchId" class="text-danger"></span></div>
             <div class="col-md-6"><label asp-for="OrderNumber" class="form-label">Money order number</label><input asp-for="OrderNumber" class="form-control"/><span asp-validation-for="OrderNumber" class="text-danger"></span></div>

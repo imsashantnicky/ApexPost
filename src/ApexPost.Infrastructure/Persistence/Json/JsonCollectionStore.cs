@@ -36,6 +36,13 @@ public sealed class JsonCollectionStore<T>
 
     public Task<bool> TryAddAsync(string key, T value, CancellationToken cancellationToken) => ChangeAsync(key, value, static (items, itemKey, itemValue) => items.TryAdd(itemKey, itemValue), cancellationToken);
 
+    /// <summary>Adds the value only if the key is free and no existing item shares its business key, in one locked step.</summary>
+    public Task<bool> TryAddUniqueAsync(string key, T value, Func<T, bool> sharesBusinessKey, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sharesBusinessKey);
+        return ChangeAsync(key, value, (items, itemKey, itemValue) => !items.Values.Any(sharesBusinessKey) && items.TryAdd(itemKey, itemValue), cancellationToken);
+    }
+
     public Task<bool> TryReplaceAsync(string key, T value, CancellationToken cancellationToken) => ChangeAsync(key, value, static (items, itemKey, itemValue) => { if (!items.ContainsKey(itemKey)) return false; items[itemKey] = itemValue; return true; }, cancellationToken);
 
     public async Task<bool> TryReplaceAsync(string key, T value, Func<T, bool> predicate, CancellationToken cancellationToken)

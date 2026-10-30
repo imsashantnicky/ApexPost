@@ -31,6 +31,7 @@ public sealed class OperationalReportService
     private readonly ICurrentActor currentActor;
     private readonly IStaffRepository staffRepository;
     private readonly OperationalAccess access;
+    private readonly TimeProvider timeProvider;
 
     public OperationalReportService(
         IBranchRepository branchRepository,
@@ -41,7 +42,8 @@ public sealed class OperationalReportService
         IIdentityVerificationRepository verificationRepository,
         ICurrentActor currentActor,
         IStaffRepository staffRepository,
-        OperationalAccess access)
+        OperationalAccess access,
+        TimeProvider timeProvider)
     {
         this.branchRepository = branchRepository ?? throw new ArgumentNullException(nameof(branchRepository));
         this.inventoryRepository = inventoryRepository ?? throw new ArgumentNullException(nameof(inventoryRepository));
@@ -52,6 +54,7 @@ public sealed class OperationalReportService
         this.currentActor = currentActor ?? throw new ArgumentNullException(nameof(currentActor));
         this.staffRepository = staffRepository ?? throw new ArgumentNullException(nameof(staffRepository));
         this.access = access ?? throw new ArgumentNullException(nameof(access));
+        this.timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async Task<ApplicationResult<OperationalSummaryReport>> BuildAsync(CancellationToken cancellationToken)
@@ -64,40 +67,25 @@ public sealed class OperationalReportService
         if (staff.Value.Status != EmploymentStatus.Active || staff.Value.BranchId.Value != assignedBranch)
             return Failure("actor.inactive", "The authenticated staff actor is unavailable.");
 
-        var role = actor.Role switch { "OperationsManager" => "BranchManager", "CounterClerk" => "CounterStaff", "InventoryClerk" => "InventoryStaff", _ => actor.Role };
-        var roleMatches = role switch
-        {
-            "Administrator" or "Auditor" => true,
-            "BranchManager" => staff.Value.Roles.Contains(StaffRole.BranchManager),
-            "InventoryStaff" => staff.Value.Roles.Contains(StaffRole.InventoryClerk),
-            "CounterStaff" => staff.Value.Roles.Contains(StaffRole.CounterClerk),
-            _ => false
-        };
-        if (!roleMatches || role is not ("Administrator" or "Auditor" or "BranchManager"))
+        if (!StaffRoleMapping.MatchesStaff(actor.Role, staff.Value.Roles) || !StaffRoleMapping.CanReadReports(actor.Role))
             return Failure("access.denied", "The actor is not authorized to view operational reports.");
 
+        var branchScoped = StaffRoleMapping.Normalize(actor.Role) == Roles.BranchManager;
         var branches = await branchRepository.ListAsync(cancellationToken);
-        if (role == "BranchManager")
+        if (branchScoped)
         {
             var authorized = await access.CheckAsync(assignedBranch, OperationalCapability.Inventory, "OperationalReport.Build", cancellationToken, requireOpenBranch: false);
             if (!authorized.IsSuccess) return ApplicationResults.Failure<OperationalSummaryReport>(authorized.Errors);
             branches = branches.Where(x => x.Value.Id.Value == assignedBranch).ToArray();
         }
-        else if (role == "Administrator")
-        {
-            foreach (var branch in branches)
-            {
-                var authorized = await access.CheckAsync(branch.Value.Id.Value, OperationalCapability.Inventory, "OperationalReport.Build", cancellationToken, requireOpenBranch: false);
-                if (!authorized.IsSuccess) return ApplicationResults.Failure<OperationalSummaryReport>(authorized.Errors);
-            }
-        }
+        // Administrators and auditors were validated above and read every branch; no per-branch check or audit row.
         var inventory = await inventoryRepository.ListAsync(cancellationToken);
         var moneyOrders = await moneyOrderRepository.ListAsync(cancellationToken);
         var shipments = await shipmentRepository.ListAsync(cancellationToken);
         var transactions = await transactionRepository.ListAsync(cancellationToken);
         var verifications = await verificationRepository.ListAsync(cancellationToken);
 
-        if (role == "BranchManager")
+        if (branchScoped)
         {
             inventory = inventory.Where(x => x.Value.BranchId.Value == assignedBranch).ToArray();
             moneyOrders = moneyOrders.Where(x => x.Value.OriginatingBranchId.Value == assignedBranch).ToArray();
@@ -114,7 +102,7 @@ public sealed class OperationalReportService
         var dailySales = BuildDailyBranchSales(branches, transactions);
         var shipmentVolume = BuildShipmentVolume(shipments);
 
-        return ApplicationResults.Success(new OperationalSummaryReport(transactionReport, paymentReport, shipmentReport, inventoryReport, branchActivity, DateTimeOffset.UtcNow)
+        return ApplicationResults.Success(new OperationalSummaryReport(transactionReport, paymentReport, shipmentReport, inventoryReport, branchActivity, timeProvider.GetUtcNow())
         {
             DailySales = dailySales,
             ShipmentVolumeByZoneAndServiceLevel = shipmentVolume
@@ -182,7 +170,7 @@ public sealed class OperationalReportService
         return new DailyBranchSalesReport(entries);
     }
 
-    private static IReadOnlyList<ShipmentVolumeEntry> BuildShipmentVolume(IReadOnlyList<Versioned<Shipment>> shipments) =>
+    private static ShipmentVolumeEntry[] BuildShipmentVolume(IReadOnlyList<Versioned<Shipment>> shipments) =>
         shipments
             .Where(item => !string.Equals(item.Value.ZoneCode, "UNKNOWN", StringComparison.Ordinal))
             .GroupBy(item => (item.Value.ZoneCode, item.Value.ServiceLevel))

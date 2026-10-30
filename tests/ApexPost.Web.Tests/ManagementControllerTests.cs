@@ -82,7 +82,7 @@ public class ManagementControllerTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private BranchManagementUseCase NewBranchUseCase(IBranchRepository repository) => new(repository, new TestActor(), new JsonAuditWriter(directory));
+    private BranchManagementUseCase NewBranchUseCase(IBranchRepository repository) => new(repository, new TestActor(), new ApexPost.Application.Auditing.AuditTrail(new JsonLinesAuditStore(directory), TimeProvider.System));
     private sealed class TestActor : ICurrentActor { public ActorContext? Actor => null; }
     private sealed class TestTempDataProvider : ITempDataProvider
     {

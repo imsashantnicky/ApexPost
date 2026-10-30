@@ -39,6 +39,7 @@ public sealed class OperationalReportTests
         var result = await fixture.Service.BuildAsync(default);
 
         Assert.True(result.IsSuccess);
+        Assert.Equal(TestClock.Now, result.Value.GeneratedAtUtc);
         var today = Assert.Single(result.Value.DailySales.Entries, entry => entry.BusinessDate == new DateOnly(2026, 10, 27));
         Assert.Equal(2, today.TransactionCount);
         Assert.Equal(25m, today.RetailSales);
@@ -53,7 +54,7 @@ public sealed class OperationalReportTests
     {
         var fixture = new Fixture();
         var item = new InventoryItem(EntityId.New(), EntityId.From(fixture.BranchId), InventorySku.From("ENV-901"), "Synthetic low stock", 3);
-        item.Receive(2, "Synthetic opening stock", DateTimeOffset.UtcNow);
+        item.Receive(2, "Synthetic opening stock", TestClock.Now);
         fixture.Inventory.Items = [new(item, 1)];
         fixture.Shipments.Items = [new(CreateShipment(fixture.BranchId, "Z01", ShippingServiceLevel.Express), 1), new(CreateShipment(Guid.NewGuid(), "Z02", ShippingServiceLevel.Standard), 1)];
         fixture.MoneyOrders.Items = [new(CreateMoneyOrder(fixture.BranchId, "MO-901001"), 1), new(CreateMoneyOrder(Guid.NewGuid(), "MO-901002"), 1)];
@@ -117,8 +118,8 @@ public sealed class OperationalReportTests
     private static IdentityVerificationRecord CreateVerification(Guid branch, VerificationStatus status)
     {
         var record = new IdentityVerificationRecord(EntityId.New(), EntityId.New(), VerificationMethod.InPersonReview, EntityId.From(branch));
-        if (status == VerificationStatus.Verified) record.MarkVerified(DateTimeOffset.UtcNow);
-        else if (status == VerificationStatus.Rejected) record.Reject("Synthetic rejection", DateTimeOffset.UtcNow);
+        if (status == VerificationStatus.Verified) record.MarkVerified(TestClock.Now);
+        else if (status == VerificationStatus.Rejected) record.Reject("Synthetic rejection", TestClock.Now);
         return record;
     }
 
@@ -133,13 +134,13 @@ public sealed class OperationalReportTests
             var staff = new StaffMember(EntityId.From(StaffId), EmployeeNumber.From("EMP-7777"), "Report Test Manager", EntityId.From(BranchId), [StaffRole.BranchManager]);
             CurrentActor = new CurrentActor(new ActorContext(StaffId, "BranchManager", BranchId, "report-test"));
             Staff = new StaffRepository(staff);
-            Access = new OperationalAccess(CurrentActor, Staff, Branches, new TestAuditWriter());
+            Access = new OperationalAccess(CurrentActor, Staff, Branches, new InMemoryAuditStore().Trail());
             Inventory = new InventoryRepository();
             Shipments = new ShipmentRepository();
             Transactions = new TransactionRepository();
             MoneyOrders = new MoneyOrderRepository();
             Verifications = new VerificationRepository();
-            Service = new OperationalReportService(Branches, Inventory, MoneyOrders, Shipments, Transactions, Verifications, CurrentActor, Staff, Access);
+            Service = new OperationalReportService(Branches, Inventory, MoneyOrders, Shipments, Transactions, Verifications, CurrentActor, Staff, Access, TestClock.Create());
         }
 
         public Guid BranchId { get; }
@@ -157,11 +158,6 @@ public sealed class OperationalReportTests
     }
 
     private sealed class CurrentActor(ActorContext? actor) : ICurrentActor { public ActorContext? Actor => actor; }
-    private sealed class TestAuditWriter : IAccessAuditWriter
-    {
-        public Task WriteAdministratorCrossBranchAccessAsync(ActorContext actor, Guid branchId, string operation, CancellationToken token) => Task.CompletedTask;
-        public Task WriteOperationAsync(ActorContext? actor, Guid? branchId, string operation, string targetType, string targetReference, string outcome, IReadOnlyDictionary<string, string>? safeMetadata, CancellationToken token) => Task.CompletedTask;
-    }
 
     private sealed class BranchRepository(Branch branch) : IBranchRepository
     {
