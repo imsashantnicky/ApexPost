@@ -31,6 +31,56 @@ public class JsonAuditAndRecoveryTests : IDisposable
         Assert.False(File.Exists(Path.Combine(directory, "audit.json")));
     }
 
+    [Theory]
+    [InlineData("Transaction.StartPayment")]
+    [InlineData("Transaction.PaymentConfirmed")]
+    [InlineData("Transaction.RetryPayment")]
+    [InlineData("IdentityVerification.Start")]
+    [InlineData("IdentityVerification.Complete")]
+    public async Task CrossBranchAudit_OperationNameContainingSensitiveWord_IsRecorded(string operation)
+    {
+        var writer = new JsonAuditWriter(directory);
+        var actor = new ActorContext(Guid.NewGuid(), "Administrator", Guid.NewGuid(), "corr-cross-branch");
+
+        await writer.WriteAdministratorCrossBranchAccessAsync(actor, Guid.NewGuid(), operation, default);
+
+        var stored = Assert.Single(await new JsonCollectionStore<JsonAuditRecord>(directory, "audit.json").ReadAllAsync(default)).Value;
+        Assert.Equal(operation, stored.Metadata["Operation"]);
+    }
+
+    [Theory]
+    [InlineData("password=hunter2")]
+    [InlineData("Transaction")]
+    [InlineData("Transaction.Start Payment")]
+    public async Task CrossBranchAudit_MalformedOperationName_IsRejected(string operation)
+    {
+        var writer = new JsonAuditWriter(directory);
+        var actor = new ActorContext(Guid.NewGuid(), "Administrator", Guid.NewGuid(), "corr-cross-branch");
+
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.WriteAdministratorCrossBranchAccessAsync(actor, Guid.NewGuid(), operation, default));
+        Assert.False(File.Exists(Path.Combine(directory, "audit.json")));
+    }
+
+    [Fact]
+    public async Task StartPaymentSucceeded_PaymentPendingStatus_IsRecorded()
+    {
+        var writer = new JsonAuditWriter(directory);
+
+        await writer.WriteOperationAsync(null, null, "Transaction.StartPayment", "RetailTransaction", "tx-1", "Succeeded", new Dictionary<string, string> { ["Status"] = "PaymentPending", ["Version"] = "2" }, default);
+
+        Assert.Equal("PaymentPending", Assert.Single(await new JsonCollectionStore<JsonAuditRecord>(directory, "audit.json").ReadAllAsync(default)).Value.Metadata["Status"]);
+    }
+
+    [Fact]
+    public async Task CorrelationIdContainingSensitiveWord_IsRecorded()
+    {
+        var writer = new JsonAuditWriter(directory);
+
+        await writer.WriteOperationAsync(null, null, "Mvc.ActionCompleted", "MvcAction", "Home.Index", "Succeeded", new Dictionary<string, string> { ["CorrelationId"] = "monkey-1" }, default);
+
+        Assert.Equal("monkey-1", Assert.Single(await new JsonCollectionStore<JsonAuditRecord>(directory, "audit.json").ReadAllAsync(default)).Value.CorrelationId);
+    }
+
     [Fact]
     public async Task OperationAuditContainsTrustedContextAndSafeFieldsOnly()
     {

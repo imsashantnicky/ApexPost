@@ -109,6 +109,31 @@ public sealed class ActionFilterTests
         Assert.DoesNotContain("password", warning, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task AuditFilter_CorrelationIdContainingKey_DoesNotFailTheAction()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "ApexPostFilterTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var http = new DefaultHttpContext { TraceIdentifier = "monkey-1" };
+            http.Request.Method = "POST";
+            var actionContext = new ActionContext(http, new RouteData(), new ActionDescriptor(), new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary());
+            actionContext.RouteData.Values["controller"] = "Transactions";
+            actionContext.RouteData.Values["action"] = "Create";
+            var executing = new ActionExecutingContext(actionContext, [], new Dictionary<string, object?>(), new object());
+            var filter = new AuditActionFilter(new ApexPost.Infrastructure.Persistence.Json.JsonAuditWriter(directory));
+
+            await filter.OnActionExecutionAsync(executing, () => Task.FromResult(new ActionExecutedContext(actionContext, [], executing.Controller) { Result = new OkResult() }));
+
+            var stored = Assert.Single(await new ApexPost.Infrastructure.Persistence.Json.JsonCollectionStore<ApexPost.Infrastructure.Persistence.Json.JsonAuditRecord>(directory, "audit.json").ReadAllAsync(default)).Value;
+            Assert.Equal("monkey-1", stored.CorrelationId);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
     private sealed class CapturingAuditWriter : IAccessAuditWriter
     {
         public List<AuditCapture> Records { get; } = [];
