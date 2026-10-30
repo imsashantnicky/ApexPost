@@ -11,11 +11,13 @@ public sealed class StaffManagementUseCase
     private readonly IStaffRepository repository;
     private readonly ICurrentActor currentActor;
     private readonly AuditTrail auditTrail;
-    public StaffManagementUseCase(IStaffRepository repository, ICurrentActor currentActor, AuditTrail auditTrail)
+    private readonly StaffAccessCache accessCache;
+    public StaffManagementUseCase(IStaffRepository repository, ICurrentActor currentActor, AuditTrail auditTrail, StaffAccessCache accessCache)
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         this.currentActor = currentActor ?? throw new ArgumentNullException(nameof(currentActor));
         this.auditTrail = auditTrail ?? throw new ArgumentNullException(nameof(auditTrail));
+        this.accessCache = accessCache ?? throw new ArgumentNullException(nameof(accessCache));
     }
 
     public async Task<ApplicationResult<StaffResponse>> CreateAsync(CreateStaffRequest request, CancellationToken cancellationToken)
@@ -57,6 +59,7 @@ public sealed class StaffManagementUseCase
             existing.Value.ChangeRoles(request.Roles);
             await AuditAsync("Staff.Update", existing.Value, "Started", cancellationToken);
             if (!await repository.TryUpdateAsync(existing.Value, request.ExpectedVersion, cancellationToken)) return Conflict<StaffResponse>();
+            accessCache.Invalidate(existing.Value.Id.Value);
             await AuditAsync("Staff.Update", existing.Value, "Succeeded", cancellationToken);
             return ApplicationResults.Success(ToResponse(existing.Value, request.ExpectedVersion + 1));
         }
@@ -74,6 +77,7 @@ public sealed class StaffManagementUseCase
             existing.Value.Suspend();
             await AuditAsync("Staff.Deactivate", existing.Value, "Started", cancellationToken);
             if (!await repository.TryUpdateAsync(existing.Value, expectedVersion, cancellationToken)) return Conflict<StaffResponse>();
+            accessCache.Invalidate(existing.Value.Id.Value);
             await AuditAsync("Staff.Deactivate", existing.Value, "Succeeded", cancellationToken);
             return ApplicationResults.Success(ToResponse(existing.Value, expectedVersion + 1));
         }

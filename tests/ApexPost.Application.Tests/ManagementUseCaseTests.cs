@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using ApexPost.Application.Branches;
 using ApexPost.Application.Catalogue;
 using ApexPost.Application.Persistence;
@@ -124,7 +125,7 @@ public class ManagementUseCaseTests
     }
 
     private static BranchManagementUseCase NewBranchUseCase(IBranchRepository repository) => new(repository, new TestActor(), new InMemoryAuditStore().Trail());
-    private static StaffManagementUseCase NewStaffUseCase(IStaffRepository repository) => new(repository, new TestActor(), new InMemoryAuditStore().Trail());
+    private static StaffManagementUseCase NewStaffUseCase(IStaffRepository repository) => new(repository, new TestActor(), new InMemoryAuditStore().Trail(), new StaffAccessCache(repository, new MemoryCache(new MemoryCacheOptions())));
     private sealed class TestActor : ApexPost.Application.Security.ICurrentActor
     {
         public ApexPost.Application.Security.ActorContext? Actor { get; } = new(Guid.NewGuid(), "Administrator", Guid.NewGuid(), "management-test");

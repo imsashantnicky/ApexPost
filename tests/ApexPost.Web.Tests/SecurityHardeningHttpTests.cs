@@ -203,6 +203,8 @@ public sealed class SecurityHardeningHttpTests
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Services.AddSingleton<IStaffRepository>(new StaffRepositoryDouble(staffExists ? [staff, auditorStaff] : [auditorStaff]));
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddMemoryCache();
+        builder.Services.AddSingleton<StaffAccessCache>();
         builder.Services.AddScoped<IAuthorizationHandler, ValidatedStaffHandler>();
         builder.Services.AddAuthentication("Cookie")
             .AddScheme<AuthenticationSchemeOptions, IntegrationApiKeyAuthenticationHandler>(IntegrationApiKeyDefaults.Scheme, _ => { })

@@ -30,6 +30,8 @@ public static class OperationalServiceCollectionExtensions
 
         services.TryAddSingleton<IBranchRepository, JsonBranchRepository>();
         services.TryAddSingleton<IStaffRepository, JsonStaffRepository>();
+        services.AddMemoryCache();
+        services.TryAddSingleton<StaffAccessCache>();
         services.TryAddSingleton<IServiceDefinitionRepository, JsonServiceDefinitionRepository>();
         services.TryAddSingleton<IInventoryItemRepository, JsonInventoryItemRepository>();
         services.TryAddSingleton<IMoneyOrderRepository, JsonMoneyOrderRepository>();
